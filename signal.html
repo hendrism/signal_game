@@ -237,7 +237,13 @@ const GAME_DATA = {
       desc:"Unlocks 30-minute expeditions (2 discoveries)."},
     t1_bandwidth:{name:"Signal Amplifier", tier:1, cost:{iron_ingot:6, copper_wire:6}, fragCost:0, requires:["t1_workshop"],
       unlocks:[{kind:"bandwidth",id:4}],
-      desc:"Boost the hub's carrier signal. Network bandwidth +4."}
+      desc:"Boost the hub's carrier signal. Network bandwidth +4."},
+    t2_extended_survey:{name:"Extended Survey Protocol", tier:2, cost:{iron_ingot:20, copper_wire:15}, fragCost:0, requires:["t1_exped30"],
+      unlocks:[{kind:"feature",id:"h2"}],
+      desc:"Methodical multi-hour sweeps of a zone. Unlocks 2-hour expeditions (3 discoveries, +1 reroll on duplicates)."},
+    t2_deep_sweep:{name:"Deep Sweep", tier:2, cost:{iron_ingot:35, copper_wire:25}, fragCost:0, requires:["t2_extended_survey"],
+      unlocks:[{kind:"feature",id:"h8"}],
+      desc:"Full overnight survey run. Unlocks 8-hour expeditions (3 discoveries, guaranteed ≥1 ruin or anomaly)."}
     /* EXT: tier-gate tech unlocking z2 requires tech fragments (doc §10) */
   },
   logs:{
