@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0a0e14">
+<title>Signal</title>
+<style>
+/* ===== Design tokens (see doc §5 + build notes) ===== */
+:root{
+  --bg:#0a0e14;          /* deep blue-black */
+  --bg-raised:#111722;
+  --bg-card:#151d2b;
+  --line:#243043;
+  --text:#c9d4e3;
+  --text-dim:#6b7a90;
+  --accent:#e8a33d;      /* phosphor amber */
+  --accent-dim:#8a6425;
+  --good:#7bc47f;
+  --danger:#d1706b;
+  --radius:12px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  background:var(--bg);color:var(--text);
+  font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  padding-bottom:calc(64px + env(safe-area-inset-bottom));
+  overscroll-behavior:none;
+}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em}
+h1,h2{font-weight:600;letter-spacing:.02em}
+h2{font-size:1.05rem;color:var(--text);margin-bottom:.5rem}
+.dim{color:var(--text-dim)} .accent{color:var(--accent)}
+.small{font-size:.82rem}
+
+/* Header / storage */
+header{position:sticky;top:0;z-index:5;background:linear-gradient(var(--bg) 70%,transparent);
+  padding:calc(10px + env(safe-area-inset-top)) 16px 12px}
+header .row{display:flex;justify-content:space-between;align-items:baseline}
+#storageStrip{display:flex;gap:14px;flex-wrap:wrap;margin-top:6px}
+#storageStrip span{white-space:nowrap}
+
+main{padding:0 16px;max-width:640px;margin:0 auto}
+.view{display:none;animation:fade .18s ease}
+.view.active{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+.card{background:var(--bg-card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:14px;margin-bottom:12px}
+.card h3{font-size:.95rem;margin-bottom:4px}
+button{background:var(--bg-raised);color:var(--text);border:1px solid var(--line);
+  border-radius:10px;padding:10px 14px;font:inherit;font-size:.9rem;cursor:pointer}
+button.primary{background:var(--accent-dim);border-color:var(--accent);color:#fff}
+button:disabled{opacity:.4}
+button:active{transform:scale(.98)}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+
+/* Constellation */
+#constellation{width:100%;height:min(52vh,420px);display:block;touch-action:manipulation}
+.nodeDot{fill:var(--text-dim)} .nodeDot.linked{fill:var(--accent)}
+.nodeDot.selected{stroke:#fff;stroke-width:1.5}
+.linkLine{stroke:var(--accent-dim);stroke-width:1.2;opacity:.7}
+.hubDot{fill:var(--accent)}
+.pulse{fill:var(--accent);opacity:.9}
+.zoneRing{fill:none;stroke:var(--line);stroke-dasharray:2 6}
+
+/* Tabs */
+nav{position:fixed;bottom:0;left:0;right:0;display:flex;z-index:10;
+  background:var(--bg-raised);border-top:1px solid var(--line);
+  padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;background:none;border:none;border-radius:0;color:var(--text-dim);
+  padding:12px 0 10px;font-size:.72rem;display:flex;flex-direction:column;gap:2px;align-items:center}
+nav button.active{color:var(--accent)}
+nav button .glyph{font-size:1.15rem;line-height:1}
+
+/* Misc */
+.progress{height:6px;background:var(--bg-raised);border-radius:3px;overflow:hidden;margin-top:6px}
+.progress>div{height:100%;background:var(--accent);transition:width 1s linear}
+textarea{width:100%;background:var(--bg-raised);color:var(--text);border:1px solid var(--line);
+  border-radius:8px;padding:8px;font-family:ui-monospace,monospace;font-size:.8rem;min-height:80px}
+#toast{position:fixed;bottom:84px;left:50%;transform:translateX(-50%);background:var(--bg-raised);
+  border:1px solid var(--accent-dim);border-radius:10px;padding:8px 16px;font-size:.85rem;
+  opacity:0;pointer-events:none;transition:opacity .25s;z-index:20;max-width:90vw;text-align:center}
+#toast.show{opacity:1}
+.scene{border-left:2px solid var(--accent-dim);padding-left:12px;margin:10px 0;font-style:italic;color:var(--text)}
+.logtext{font-family:ui-monospace,monospace;font-size:.85rem;white-space:pre-wrap;color:var(--text)}
+dialog{background:var(--bg-card);color:var(--text);border:1px solid var(--line);border-radius:var(--radius);
+  padding:16px;max-width:min(480px,90vw);margin:auto}
+dialog::backdrop{background:rgba(0,0,0,.6)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="row"><h1 style="font-size:1.1rem">SIGNAL</h1><span id="clock" class="dim small mono"></span></div>
+  <div id="storageStrip" class="mono small"></div>
+</header>
+
+<main>
+  <!-- ============ NETWORK ============ -->
+  <section id="view-network" class="view active">
+    <svg id="constellation" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div id="nodePanel"></div>
+  </section>
+
+  <!-- ============ EXPEDITIONS ============ -->
+  <section id="view-expeditions" class="view">
+    <div id="expeditionList"></div>
+    <div id="sceneArea"></div>
+  </section>
+
+  <!-- ============ WORKSHOP ============ -->
+  <section id="view-workshop" class="view">
+    <div id="workshopArea"></div>
+  </section>
+
+  <!-- ============ RESEARCH ============ -->
+  <section id="view-research" class="view">
+    <div id="researchArea"></div>
+  </section>
+
+  <!-- ============ LOGS / SETTINGS ============ -->
+  <section id="view-logs" class="view">
+    <h2>Recovered logs</h2>
+    <div id="logList"></div>
+    <div class="card">
+      <h3>Save data</h3>
+      <div class="btnrow">
+        <button class="primary" onclick="UI.downloadSave()">Download backup</button>
+        <button onclick="document.getElementById('filePick').click()">Restore from file</button>
+      </div>
+      <input type="file" id="filePick" accept=".json,application/json" style="display:none" onchange="UI.importFromFile(this)">
+      <div class="btnrow">
+        <button onclick="UI.exportSave()">Copy to clipboard</button>
+        <button onclick="UI.showImport()">Paste from clipboard</button>
+      </div>
+      <div id="importArea" style="display:none;margin-top:8px">
+        <textarea id="importBox" placeholder="Paste save JSON here"></textarea>
+        <div class="btnrow"><button class="primary" onclick="UI.importSave()">Load save</button></div>
+      </div>
+      <p class="dim small" style="margin-top:8px">Autosaves every 30s on this device.</p>
+    </div>
+    <div class="card">
+      <h3>Testing tools <button class="small" style="float:right;padding:4px 10px" onclick="DEV.toggle()">show</button></h3>
+      <div id="devPanel" style="display:none">
+        <p class="dim small">For playtesting only. Time skips advance production, workshop, and expedition timers exactly like being away.</p>
+        <div class="btnrow">
+          <button onclick="DEV.finishExpeditions()">Finish expeditions now</button>
+          <button onclick="DEV.timeSkip(600)">Skip 10 min</button>
+          <button onclick="DEV.timeSkip(3600)">Skip 1 hr</button>
+          <button onclick="DEV.timeSkip(28800)">Skip 8 hr</button>
+        </div>
+        <div class="btnrow">
+          <button onclick="DEV.grantPack()">+100 basics</button>
+          <button onclick="DEV.reset()">Reset save</button>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<nav id="tabbar">
+  <button data-view="network"><span class="glyph">✦</span>Network</button>
+  <button data-view="expeditions"><span class="glyph">➤</span>Expeditions</button>
+  <button data-view="workshop"><span class="glyph">⚒</span>Workshop</button>
+  <button data-view="research"><span class="glyph">◉</span>Research</button>
+  <button data-view="logs"><span class="glyph">≡</span>Logs</button>
+</nav>
+
+<div id="toast"></div>
+<dialog id="modal"></dialog>
+
+<script>
+"use strict";
+/* =====================================================================
+   SIGNAL — engine scaffold (Stage 1 + core loop)
+   Architecture rule (doc §3/§9): GAME_DATA is content, State is save,
+   Engine never hardcodes content ids outside GAME_DATA lookups.
+   Extension points are marked EXT:.
+   ===================================================================== */
+
+/* ============================ GAME_DATA ============================ */
+/* EXT: Stage 2+ content replaces/extends this stub. Schemas: doc §9. */
+const GAME_DATA = {
+  resources:{
+    scrap:      {name:"Scrap",       tier:1, glyph:"▪"},
+    iron_ore:   {name:"Iron Ore",    tier:1, glyph:"◆"},
+    copper_ore: {name:"Copper Ore",  tier:1, glyph:"◇"},
+    iron_ingot: {name:"Iron Ingot",  tier:1, glyph:"▰"},
+    copper_wire:{name:"Copper Wire", tier:1, glyph:"∿"},
+    tech_frag:  {name:"Tech Fragment",tier:1, glyph:"✧"}
+  },
+  recipes:{
+    iron_ingot: {name:"Iron Ingot", tier:1, in:{iron_ore:2}, out:{iron_ingot:1}, secs:10, unlockTech:"t1_workshop"},
+    copper_wire:{name:"Copper Wire",tier:1, in:{copper_ore:1},out:{copper_wire:2}, secs:8,  unlockTech:"t1_workshop"}
+  },
+  zones:{
+    z1_lowlands:{name:"The Lowlands", tier:1, unlockTech:null,
+      flavor:"Rust-colored plains under a pale sky. Something here still hums.",
+      discoveryTable:[
+        {nodeId:"n_scrap_a", weight:30},
+        {nodeId:"n_iron_a",  weight:25},
+        {nodeId:"n_copper_a",weight:25},
+        {nodeId:"n_ruin_a",  weight:12},
+        {nodeId:"n_anom_a",  weight:8}
+      ]}
+    /* EXT: z2_ashfields ... z6_signal_source */
+  },
+  nodes:{
+    n_scrap_a: {type:"extractor", zone:"z1_lowlands", name:"Debris Field",
+      produces:"scrap", ratePerMin:0.5, linkCost:{scrap:10}, sceneId:"sc_scrap_a", unique:false},
+    n_iron_a:  {type:"extractor", zone:"z1_lowlands", name:"Rustvein Deposit",
+      produces:"iron_ore", ratePerMin:1, linkCost:{scrap:20}, sceneId:"sc_iron_a", unique:false},
+    n_copper_a:{type:"extractor", zone:"z1_lowlands", name:"Greenseam Outcrop",
+      produces:"copper_ore", ratePerMin:1, linkCost:{scrap:25}, sceneId:"sc_copper_a", unique:false},
+    n_ruin_a:  {type:"ruin", zone:"z1_lowlands", name:"Collapsed Waystation",
+      loot:{scrap:25, tech_frag:1}, logId:"log_001", linkCost:{}, sceneId:"sc_ruin_a", unique:true},
+    n_anom_a:  {type:"anomaly", zone:"z1_lowlands", name:"Flickering Cache",
+      eventId:"ev_cache", linkCost:{}, sceneId:"sc_anom_a", unique:true}
+  },
+  tech:{
+    t1_workshop:{name:"Field Workshop", tier:1, cost:{scrap:30}, fragCost:0, requires:[],
+      unlocks:[{kind:"feature",id:"workshop"}],
+      desc:"Assemble a crude refinery. Unlocks the Workshop tab."},
+    t1_link2:{name:"Braided Links", tier:1, cost:{iron_ingot:10, copper_wire:10}, fragCost:0, requires:["t1_workshop"],
+      unlocks:[{kind:"linkTier",id:2}],
+      desc:"Double the throughput of upgraded nodes (link tier 2)."},
+    t1_storage:{name:"Cache Expansion", tier:1, cost:{iron_ingot:15}, fragCost:0, requires:["t1_workshop"],
+      unlocks:[{kind:"storage",id:1000}],
+      desc:"Storage capacity 500 → 1,000 per resource."},
+    t1_exped30:{name:"Trail Mapping", tier:1, cost:{scrap:15}, fragCost:0, requires:[],
+      unlocks:[{kind:"feature",id:"m30"}],
+      desc:"Unlocks 30-minute expeditions (2 discoveries)."},
+    t1_bandwidth:{name:"Signal Amplifier", tier:1, cost:{iron_ingot:6, copper_wire:6}, fragCost:0, requires:["t1_workshop"],
+      unlocks:[{kind:"bandwidth",id:4}],
+      desc:"Boost the hub's carrier signal. Network bandwidth +4."}
+    /* EXT: tier-gate tech unlocking z2 requires tech fragments (doc §10) */
+  },
+  logs:{
+    log_001:{title:"Field Note 7", text:"…relay went quiet on the third day. We told ourselves it was weather.\nIt was not weather."}
+  },
+  scenes:{
+    sc_scrap_a:{text:"Twisted panels half-buried in red soil. Whatever fell here fell hard, and long ago.", choiceId:null},
+    sc_iron_a:{text:"A seam of dark ore runs through the hillside like a closed eye.", choiceId:null},
+    sc_copper_a:{text:"Green-crusted stone, warm to the touch. The detector ticks approvingly.", choiceId:null},
+    sc_ruin_a:{text:"A waystation, roof fallen in. Someone left in a hurry — but they left things behind.", choiceId:null},
+    sc_anom_a:{text:"A supply cache, its lock-light still blinking after all this time. Blinking at you.", choiceId:"ev_cache"}
+  },
+  events:{
+    ev_cache:{text:"The cache is sealed but the housing is brittle. Force it, or trace its power line first?",
+      choices:[
+        {label:"Force it open", effects:{grant:{scrap:40}}},
+        {label:"Trace the line", effects:{grant:{tech_frag:1}, logId:null, anomalyChance:0}}
+      ]}
+  },
+  expeditionDurations:{ /* EXT: gate longer ones behind tech features */
+    m5:  {label:"5 min",  secs:300,   discoveries:1, needs:null},
+    m30: {label:"30 min", secs:1800,  discoveries:2, needs:"m30"},
+    h2:  {label:"2 hr",   secs:7200,  discoveries:3, needs:"h2"},
+    h8:  {label:"8 hr",   secs:28800, discoveries:3, needs:"h8"}
+  }
+};
+
+/* ============================== STATE ============================== */
+const SCHEMA_VERSION = 1;
+const SAVE_KEY = "signal_save_v1";
+
+function freshState(){
+  return {
+    schemaVersion:SCHEMA_VERSION, createdAt:Date.now(), lastSaved:Date.now(), lastBackup:Date.now(),
+    rngSeed:(Math.random()*2**31)|0,
+    inv:{scrap:15}, storageCap:500,
+    nodes:{},                 // id -> {discovered, linked, linkTier}
+    tech:[],
+    features:["m5"],          // feature flags unlocked (expedition durations, workshop…)
+    expeditions:[{slot:1, zone:null, ends:0, durationKey:null, pending:[]}],
+    workshop:[],              // [{recipe, qtyQueued, startedAt}] single active queue for v1
+    logsSeen:[], pity:0,
+    beacon:{}
+  };
+}
+let S = freshState();
+
+/* ============================ SAVE/LOAD ============================ */
+const Save = {
+  write(){ S.lastSaved = Date.now();
+    try{ localStorage.setItem(SAVE_KEY, JSON.stringify(S)); }catch(e){ /* private mode */ } },
+  load(){
+    try{
+      const raw = localStorage.getItem(SAVE_KEY);
+      if(!raw) return false;
+      const data = JSON.parse(raw);
+      S = migrate(data);
+      return true;
+    }catch(e){ console.warn("Load failed", e); return false; }
+  }
+};
+function migrate(data){
+  /* EXT: when SCHEMA_VERSION bumps, transform old saves here, step by step */
+  if(data.lastBackup === undefined) data.lastBackup = data.createdAt || Date.now();
+  if(data.schemaVersion === SCHEMA_VERSION) return data;
+  return data; // v1: nothing to do
+}
+
+/* =============================== RNG =============================== */
+function mulberry32(seed){
+  return function(){
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed>>>15, 1|seed);
+    t = t + Math.imul(t ^ t>>>7, 61|t) ^ t;
+    return ((t ^ t>>>14) >>> 0) / 4294967296;
+  };
+}
+let rand = mulberry32(S.rngSeed);
+function roll(){ const r = rand(); S.rngSeed = (S.rngSeed + 0x9E3779B9)|0; rand = mulberry32(S.rngSeed); return r; }
+
+/* ============================ HELPERS ============================= */
+const $ = sel => document.querySelector(sel);
+const R = id => GAME_DATA.resources[id];
+function fmt(n){ return n >= 1000 ? (n/1000).toFixed(1).replace(/\.0$/,"")+"k" : Math.floor(n).toString(); }
+function fmtTime(secs){
+  secs = Math.max(0, Math.ceil(secs));
+  const h = Math.floor(secs/3600), m = Math.floor(secs%3600/60), s = secs%60;
+  return h ? `${h}h ${m}m` : m ? `${m}m ${s}s` : `${s}s`;
+}
+function canAfford(cost){ return Object.entries(cost||{}).every(([r,n]) => (S.inv[r]||0) >= n); }
+function pay(cost){ for(const [r,n] of Object.entries(cost||{})) S.inv[r] = (S.inv[r]||0) - n; }
+function grant(gains){
+  for(const [r,n] of Object.entries(gains||{}))
+    S.inv[r] = Math.min(S.storageCap, (S.inv[r]||0) + n);
+}
+function hasTech(id){ return S.tech.includes(id); }
+function hasFeature(id){ return S.features.includes(id); }
+/* Bandwidth (doc §2.1/§10): linked extractors consume 2^(linkTier-1).
+   Capacity = base 6 + tech unlocks + linked relays' bwProvide. */
+function bwUsed(){
+  let used = 0;
+  for(const [id,st] of Object.entries(S.nodes)){
+    if(!st.linked) continue;
+    const n = GAME_DATA.nodes[id.split("#")[0]];
+    if(n.type === "extractor") used += 2 ** ((st.linkTier||1)-1);
+  }
+  return used;
+}
+function bwCap(){
+  let cap = 6;
+  for(const id of S.tech) for(const u of (GAME_DATA.tech[id]?.unlocks||[]))
+    if(u.kind === "bandwidth") cap += u.id;
+  for(const [id,st] of Object.entries(S.nodes)){
+    if(!st.linked) continue;
+    const n = GAME_DATA.nodes[id.split("#")[0]];
+    if(n.type === "relay") cap += (n.bwProvide||0);
+  }
+  return cap;
+}
+function toast(msg){
+  const t = $("#toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(toast._t); toast._t = setTimeout(()=>t.classList.remove("show"), 2400);
+}
+
+/* =========================== PRODUCTION =========================== */
+/* Pure function: given elapsed seconds, returns gains. Used by both
+   the live tick and offline catch-up so the math can never diverge. */
+function productionGains(elapsedSecs){
+  const gains = {};
+  for(const [id, st] of Object.entries(S.nodes)){
+    if(!st.linked) continue;
+    const n = GAME_DATA.nodes[id.split("#")[0]];
+    if(n.type !== "extractor") continue;
+    const mult = 2 ** ((st.linkTier||1) - 1);        // doc §10: ×2 per link tier
+    const amt = n.ratePerMin * mult * elapsedSecs / 60;
+    gains[n.produces] = (gains[n.produces]||0) + amt;
+  }
+  return gains;
+}
+
+/* =========================== EXPEDITIONS =========================== */
+const Expedition = {
+  start(slotIdx, zoneId, durationKey){
+    const slot = S.expeditions[slotIdx];
+    const dur = GAME_DATA.expeditionDurations[durationKey];
+    if(!slot || slot.zone || !dur) return;
+    slot.zone = zoneId; slot.durationKey = durationKey;
+    slot.ends = Date.now() + dur.secs*1000; slot.pending = [];
+    Save.write(); UI.render();
+  },
+  /* Called by tick + offline catch-up. Resolves finished expeditions
+     into pending discoveries; player taps through scenes to claim. */
+  checkResolve(){
+    let resolved = 0;
+    for(const slot of S.expeditions){
+      if(slot.zone && slot.ends <= Date.now() && slot.pending.length === 0){
+        const dur = GAME_DATA.expeditionDurations[slot.durationKey];
+        for(let i=0; i<dur.discoveries; i++) slot.pending.push(this.rollDiscovery(slot.zone));
+        resolved++;
+      }
+    }
+    return resolved;
+  },
+  rollDiscovery(zoneId){
+    const zone = GAME_DATA.zones[zoneId];
+    let table = zone.discoveryTable.filter(e=>{
+      const n = GAME_DATA.nodes[e.nodeId];
+      return !(n.unique && S.nodes[e.nodeId]?.discovered);
+    });
+    // Pity (doc §11): 3 dupes in a row forces an unfound unique if any remain
+    const uniques = table.filter(e => GAME_DATA.nodes[e.nodeId].unique);
+    if(S.pity >= 3 && uniques.length) table = uniques;
+    if(!table.length) return {nodeId:null, grant:{scrap:10}};   // zone surveyed
+    const total = table.reduce((s,e)=>s+e.weight,0);
+    let r = roll()*total, pick = table[0];
+    for(const e of table){ r -= e.weight; if(r<=0){ pick = e; break; } }
+    const base = GAME_DATA.nodes[pick.nodeId];
+    // Duplicate extractor => new instance id (doc §11)
+    let nodeId = pick.nodeId;
+    if(!base.unique && S.nodes[nodeId]?.discovered){
+      let i=2; while(S.nodes[`${pick.nodeId}#${i}`]) i++;
+      nodeId = `${pick.nodeId}#${i}`;
+      S.pity++;
+    } else S.pity = 0;
+    return {nodeId};
+  },
+  /* Player taps through pending discoveries one at a time */
+  claimNext(slotIdx){
+    const slot = S.expeditions[slotIdx];
+    const d = slot.pending.shift();
+    if(d){
+      if(d.nodeId){
+        S.nodes[d.nodeId] = {discovered:true, linked:false, linkTier:1};
+        const base = GAME_DATA.nodes[d.nodeId.split("#")[0]];
+        if(base.type === "ruin"){ grant(base.loot); if(base.logId && !S.logsSeen.includes(base.logId)) S.logsSeen.push(base.logId); }
+        UI.showScene(d.nodeId);
+      } else { grant(d.grant); toast("Surveyed ground. +"+fmt(d.grant.scrap)+" scrap"); }
+    }
+    if(slot.pending.length === 0){ slot.zone = null; slot.ends = 0; slot.durationKey = null; }
+    Save.write(); UI.render();
+  }
+};
+
+/* ============================ WORKSHOP ============================ */
+const Workshop = {
+  queue(recipeId, qty){
+    const r = GAME_DATA.recipes[recipeId];
+    const cost = {}; for(const [res,n] of Object.entries(r.in)) cost[res] = n*qty;
+    if(!canAfford(cost)) return toast("Not enough materials");
+    pay(cost);
+    S.workshop.push({recipe:recipeId, qtyQueued:qty, startedAt:Date.now()});
+    Save.write(); UI.render();
+  },
+  /* Advance queues by elapsed seconds. Same path live + offline. */
+  advance(elapsedSecs){
+    let budget = elapsedSecs;
+    while(S.workshop.length && budget > 0){
+      const job = S.workshop[0];
+      const r = GAME_DATA.recipes[job.recipe];
+      const done = Math.min(job.qtyQueued, Math.floor(budget / r.secs));
+      if(done > 0){
+        const gains = {}; for(const [res,n] of Object.entries(r.out)) gains[res] = n*done;
+        grant(gains);
+        job.qtyQueued -= done; budget -= done * r.secs;
+      }
+      if(job.qtyQueued <= 0) S.workshop.shift(); else break;
+    }
+    // Track partial progress via startedAt drift so live ticks feel continuous
+    if(S.workshop.length) S.workshop[0].startedAt = Date.now() - 0; // EXT: sub-item progress bar
+  }
+};
+
+/* ============================ RESEARCH ============================ */
+const Research = {
+  buy(techId){
+    const t = GAME_DATA.tech[techId];
+    if(hasTech(techId) || !t) return;
+    if(t.requires.some(req=>!hasTech(req))) return;
+    const cost = {...t.cost}; if(t.fragCost) cost.tech_frag = t.fragCost;
+    if(!canAfford(cost)) return toast("Not enough materials");
+    pay(cost); S.tech.push(techId);
+    for(const u of t.unlocks){
+      if(u.kind === "storage") S.storageCap = u.id;
+      if(u.kind === "feature" && !S.features.includes(u.id)) S.features.push(u.id);
+      /* zone + linkTier unlocks are read live via hasTech()/maxLinkTier() */
+    }
+    toast("Researched: " + t.name);
+    Save.write(); UI.render();
+  },
+  maxLinkTier(){
+    let max = 1;
+    for(const id of S.tech) for(const u of (GAME_DATA.tech[id]?.unlocks||[]))
+      if(u.kind === "linkTier") max = Math.max(max, u.id);
+    return max;
+  }
+};
+
+/* ============================= NETWORK ============================= */
+const Network = {
+  link(nodeId){
+    const st = S.nodes[nodeId]; const base = GAME_DATA.nodes[nodeId.split("#")[0]];
+    if(!st || st.linked) return;
+    if(base.type === "extractor"){
+      const need = 2 ** ((st.linkTier||1)-1);
+      if(bwUsed() + need > bwCap()) return toast(`Not enough bandwidth (needs ${need}, ${bwCap()-bwUsed()} free)`);
+    }
+    if(!canAfford(base.linkCost)) return toast("Not enough materials");
+    pay(base.linkCost); st.linked = true;
+    toast(base.name + " linked to network");
+    Save.write(); UI.render();
+  },
+  unlink(nodeId){
+    const st = S.nodes[nodeId];
+    if(!st?.linked) return;
+    st.linked = false;   // link tier is kept; materials are not refunded (doc §10)
+    toast("Node disconnected — bandwidth freed");
+    Save.write(); UI.render();
+  },
+  upgrade(nodeId){
+    const st = S.nodes[nodeId]; const base = GAME_DATA.nodes[nodeId.split("#")[0]];
+    if(!st?.linked) return;
+    if(st.linkTier >= Research.maxLinkTier()) return toast("Research a higher link tier first");
+    const added = 2 ** st.linkTier - 2 ** (st.linkTier-1);
+    if(base.type === "extractor" && bwUsed() + added > bwCap())
+      return toast(`Not enough bandwidth (needs ${added} more)`);
+    const cost = {}; for(const [r,n] of Object.entries(base.linkCost)) cost[r] = n*3; // doc §10
+    if(!canAfford(cost)) return toast("Not enough materials");
+    pay(cost); st.linkTier++;
+    Save.write(); UI.render();
+  }
+};
+
+/* ======================== OFFLINE CATCH-UP ======================== */
+function offlineCatchUp(){
+  const elapsed = Math.max(0, (Date.now() - S.lastSaved)/1000);
+  if(elapsed < 60) return null;                    // ignore trivial gaps
+  const gains = productionGains(elapsed);
+  grant(gains);
+  Workshop.advance(elapsed);
+  const resolved = Expedition.checkResolve();
+  return {elapsed, gains, resolved};
+}
+
+/* ============================== TICK ============================== */
+let lastTick = Date.now();
+function tick(){
+  const now = Date.now();
+  const dt = (now - lastTick)/1000; lastTick = now;
+  grant(productionGains(dt));
+  Workshop.advance(dt);
+  if(Expedition.checkResolve()) toast("An expedition has returned");
+  UI.renderLive();
+}
+setInterval(tick, 1000);
+setInterval(Save.write, 30000);
+document.addEventListener("visibilitychange", ()=>{
+  if(document.hidden) Save.write();
+  else { const away = offlineCatchUp(); if(away) UI.awaySummary(away); lastTick = Date.now(); UI.render(); }
+});
+
+/* =============================== UI =============================== */
+const UI = {
+  currentView:"network", selectedNode:null,
+
+  switchView(v){
+    this.currentView = v;
+    document.querySelectorAll(".view").forEach(el=>el.classList.toggle("active", el.id === "view-"+v));
+    document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("active", b.dataset.view === v));
+    this.render();
+  },
+
+  render(){
+    this.renderStorage(); this.renderConstellation(); this.renderNodePanel();
+    this.renderExpeditions(); this.renderWorkshop(); this.renderResearch(); this.renderLogs();
+  },
+  renderLive(){  // cheap per-second updates only
+    this.renderStorage();
+    if(this.currentView === "expeditions") this.renderExpeditions();
+    $("#clock").textContent = new Date().toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+  },
+
+  renderStorage(){
+    const shown = Object.keys(GAME_DATA.resources).filter(r => (S.inv[r]||0) > 0);
+    const bw = `<span class="accent">⧉ ${bwUsed()}<span class="dim">/${bwCap()}</span> <span class="dim">bandwidth</span></span>`;
+    $("#storageStrip").innerHTML = bw + (shown.map(r =>
+      `<span>${R(r).glyph} ${fmt(S.inv[r])}<span class="dim">/${fmt(S.storageCap)}</span> <span class="dim">${R(r).name}</span></span>`
+    ).join("") || `<span class="dim">Storage empty — send an expedition.</span>`);
+  },
+
+  /* Constellation: deterministic radial layout (doc §11) */
+  renderConstellation(){
+    const svg = $("#constellation");
+    const W = svg.clientWidth || 360, H = svg.clientHeight || 320;
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    const cx = W/2, cy = H/2;
+    let out = `<circle class="hubDot" cx="${cx}" cy="${cy}" r="6"><title>Hub</title></circle>`;
+    const zones = Object.keys(GAME_DATA.zones);
+    zones.forEach((zid, zi)=>{
+      const ringR = (Math.min(W,H)/2 - 24) * (zi+1)/zones.length;
+      out = `<circle class="zoneRing" cx="${cx}" cy="${cy}" r="${ringR}"/>` + out;
+      const zoneNodes = Object.keys(S.nodes).filter(id => GAME_DATA.nodes[id.split("#")[0]].zone === zid);
+      const arcStart = -Math.PI/2 - Math.PI*0.75, arcSpan = Math.PI*1.5;   // EXT: per-zone sectors when zones>1
+      zoneNodes.forEach((id, i)=>{
+        const a = arcStart + arcSpan * (i+1)/(zoneNodes.length+1);
+        const x = cx + ringR*Math.cos(a), y = cy + ringR*Math.sin(a);
+        const st = S.nodes[id];
+        if(st.linked){
+          out += `<line class="linkLine" x1="${cx}" y1="${cy}" x2="${x}" y2="${y}"/>`;
+          out += `<circle class="pulse" r="2.2"><animateMotion dur="4s" repeatCount="indefinite" path="M ${x} ${y} L ${cx} ${cy}"/></circle>`;
+        }
+        const sel = this.selectedNode === id ? " selected":"";
+        out += `<circle class="nodeDot${st.linked?" linked":""}${sel}" data-node="${id}" cx="${x}" cy="${y}" r="7" opacity="${st.linked?1:.5}"/>`;
+      });
+    });
+    svg.innerHTML = out;
+    svg.querySelectorAll("[data-node]").forEach(el =>
+      el.addEventListener("click", ()=>{ this.selectedNode = el.dataset.node; this.render(); }));
+  },
+
+  renderNodePanel(){
+    const el = $("#nodePanel");
+    const total = Object.keys(S.nodes).length;
+    if(!this.selectedNode || !S.nodes[this.selectedNode]){
+      el.innerHTML = total
+        ? `<p class="dim small" style="text-align:center">Tap a node.</p>`
+        : `<div class="card"><h3>The network is silent</h3><p class="dim small">Send your first expedition to find something worth connecting.</p>
+           <div class="btnrow"><button class="primary" onclick="UI.switchView('expeditions')">Expeditions ➤</button></div></div>`;
+      return;
+    }
+    const id = this.selectedNode, st = S.nodes[id], base = GAME_DATA.nodes[id.split("#")[0]];
+    const costStr = c => Object.entries(c||{}).map(([r,n])=>`${n} ${R(r).name}`).join(", ") || "—";
+    let body = `<p class="dim small">${GAME_DATA.zones[base.zone].name} · ${base.type}</p>`;
+    if(base.type === "extractor"){
+      const mult = 2 ** ((st.linkTier||1)-1);
+      body += st.linked
+        ? `<p class="small">Producing <span class="accent mono">${base.ratePerMin*mult}/min</span> ${R(base.produces).name} · link tier ${st.linkTier} · using <span class="mono">${mult}</span> bandwidth</p>
+           <div class="btnrow"><button onclick="Network.upgrade('${id}')">Upgrade link · ${costStr(Object.fromEntries(Object.entries(base.linkCost).map(([r,n])=>[r,n*3])))} · +${mult} ⧉</button>
+           <button onclick="Network.unlink('${id}')">Disconnect</button></div>`
+        : `<p class="small">Would produce <span class="mono">${base.ratePerMin * 2**((st.linkTier||1)-1)}/min</span> ${R(base.produces).name} · needs <span class="mono">${2**((st.linkTier||1)-1)}</span> ⧉ bandwidth</p>
+           <div class="btnrow"><button class="primary" onclick="Network.link('${id}')">Link · ${costStr(base.linkCost)}</button></div>`;
+    } else if(base.type === "relay"){
+      body += st.linked
+        ? `<p class="small">Providing <span class="accent mono">+${base.bwProvide||0}</span> ⧉ bandwidth</p>`
+        : `<p class="small">Would provide <span class="mono">+${base.bwProvide||0}</span> ⧉ bandwidth</p>
+           <div class="btnrow"><button class="primary" onclick="Network.link('${id}')">Link · ${costStr(base.linkCost)}</button></div>`;
+    } else {
+      body += `<p class="small dim">Nothing further here — its purpose is served.</p>`;
+    }
+    el.innerHTML = `<div class="card"><h3>${base.name}${id.includes("#")?" "+id.split("#")[1]:""}</h3>${body}</div>`;
+  },
+
+  renderExpeditions(){
+    const el = $("#expeditionList");
+    el.innerHTML = S.expeditions.map((slot, i)=>{
+      if(slot.pending.length){
+        return `<div class="card"><h3>Expedition returned</h3>
+          <p class="dim small">${slot.pending.length} discover${slot.pending.length>1?"ies":"y"} to review</p>
+          <div class="btnrow"><button class="primary" onclick="Expedition.claimNext(${i})">See what you found</button></div></div>`;
+      }
+      if(slot.zone){
+        const dur = GAME_DATA.expeditionDurations[slot.durationKey];
+        const remain = (slot.ends - Date.now())/1000;
+        const pct = Math.min(100, 100*(1 - remain/dur.secs));
+        return `<div class="card"><h3>${GAME_DATA.zones[slot.zone].name}</h3>
+          <p class="dim small">Returns in ${fmtTime(remain)}</p>
+          <div class="progress"><div style="width:${pct}%"></div></div></div>`;
+      }
+      const zones = Object.entries(GAME_DATA.zones).filter(([,z]) => !z.unlockTech || hasTech(z.unlockTech));
+      return `<div class="card"><h3>Slot ${i+1} — ready</h3>` + zones.map(([zid,z])=>
+        `<p class="small" style="margin-top:6px">${z.name} <span class="dim">· ${z.flavor}</span></p>
+         <div class="btnrow">` +
+        Object.entries(GAME_DATA.expeditionDurations)
+          .filter(([k,d]) => !d.needs || hasFeature(d.needs))
+          .map(([k,d]) => `<button onclick="Expedition.start(${i},'${zid}','${k}')">${d.label}</button>`).join("") +
+        `</div>`).join("") + `</div>`;
+    }).join("");
+  },
+
+  showScene(nodeId){
+    const base = GAME_DATA.nodes[nodeId.split("#")[0]];
+    const scene = GAME_DATA.scenes[base.sceneId];
+    const modal = $("#modal");
+    let html = `<h3>${base.name}</h3><div class="scene">${scene?scene.text:""}</div>`;
+    if(base.type === "ruin" && base.logId){
+      const log = GAME_DATA.logs[base.logId];
+      html += `<p class="small accent">Recovered: ${log.title}</p>`;
+    }
+    if(scene?.choiceId){
+      const ev = GAME_DATA.events[scene.choiceId];
+      html += `<p class="small" style="margin-top:8px">${ev.text}</p><div class="btnrow">` +
+        ev.choices.map((c,ci)=>`<button class="primary" onclick="UI.resolveChoice('${scene.choiceId}',${ci})">${c.label}</button>`).join("") + `</div>`;
+    } else {
+      html += `<div class="btnrow"><button class="primary" onclick="document.getElementById('modal').close()">Continue</button></div>`;
+    }
+    modal.innerHTML = html; modal.showModal();
+  },
+  resolveChoice(eventId, ci){
+    const c = GAME_DATA.events[eventId].choices[ci];
+    grant(c.effects.grant);
+    if(c.effects.logId && !S.logsSeen.includes(c.effects.logId)) S.logsSeen.push(c.effects.logId);
+    /* EXT: anomalyChance -> bonus roll */
+    $("#modal").close(); Save.write(); this.render();
+    const got = Object.entries(c.effects.grant||{}).map(([r,n])=>`+${n} ${R(r).name}`).join(", ");
+    if(got) toast(got);
+  },
+
+  renderWorkshop(){
+    const el = $("#workshopArea");
+    if(!hasFeature("workshop") && !hasTech("t1_workshop")){
+      el.innerHTML = `<div class="card"><h3>Workshop</h3><p class="dim small">Research <b>Field Workshop</b> to refine raw materials.</p></div>`;
+      return;
+    }
+    let html = "";
+    if(S.workshop.length){
+      const job = S.workshop[0], r = GAME_DATA.recipes[job.recipe];
+      html += `<div class="card"><h3>Refining: ${r.name}</h3><p class="dim small mono">${job.qtyQueued} remaining · ${r.secs}s each</p></div>`;
+    }
+    html += Object.entries(GAME_DATA.recipes)
+      .filter(([,r]) => !r.unlockTech || hasTech(r.unlockTech))
+      .map(([id,r])=>{
+        const inStr = Object.entries(r.in).map(([res,n])=>`${n} ${R(res).name}`).join(" + ");
+        const outStr = Object.entries(r.out).map(([res,n])=>`${n} ${R(res).name}`).join(" + ");
+        return `<div class="card"><h3>${r.name}</h3><p class="dim small">${inStr} → ${outStr} · ${r.secs}s</p>
+          <div class="btnrow"><button onclick="Workshop.queue('${id}',5)">Queue ×5</button>
+          <button onclick="Workshop.queue('${id}',20)">Queue ×20</button></div></div>`;
+      }).join("");
+    el.innerHTML = html;
+  },
+
+  renderResearch(){
+    const el = $("#researchArea");
+    el.innerHTML = Object.entries(GAME_DATA.tech).map(([id,t])=>{
+      const owned = hasTech(id);
+      const locked = t.requires.some(req=>!hasTech(req));
+      const cost = {...t.cost}; if(t.fragCost) cost.tech_frag = t.fragCost;
+      const costStr = Object.entries(cost).map(([r,n])=>`${n} ${R(r).name}`).join(", ");
+      return `<div class="card" style="${owned?"opacity:.55":""}">
+        <h3>${t.name} ${owned?'<span class="good small">· researched</span>':""}</h3>
+        <p class="dim small">${t.desc}</p>
+        ${owned?"":`<div class="btnrow"><button class="${locked?"":"primary"}" ${locked?"disabled":""}
+          onclick="Research.buy('${id}')">${locked?"Requires earlier research":"Research · "+costStr}</button></div>`}
+      </div>`;
+    }).join("");
+  },
+
+  renderLogs(){
+    $("#logList").innerHTML = S.logsSeen.length
+      ? S.logsSeen.map(id=>{
+          const l = GAME_DATA.logs[id];
+          return `<div class="card"><h3>${l.title}</h3><p class="logtext">${l.text}</p></div>`;
+        }).join("")
+      : `<div class="card"><p class="dim small">No logs recovered yet. Ruins hold them.</p></div>`;
+  },
+
+  awaySummary(away){
+    const gainStr = Object.entries(away.gains).filter(([,n])=>n>=1)
+      .map(([r,n])=>`${R(r).glyph} +${fmt(n)} ${R(r).name}`).join("<br>");
+    const modal = $("#modal");
+    modal.innerHTML = `<h3>While you were away</h3>
+      <p class="dim small">${fmtTime(away.elapsed)} elapsed</p>
+      <p class="mono small" style="margin-top:8px">${gainStr || "The network held steady."}</p>
+      ${away.resolved?`<p class="small accent" style="margin-top:8px">${away.resolved} expedition(s) returned.</p>`:""}
+      <div class="btnrow"><button class="primary" onclick="document.getElementById('modal').close()">Continue</button></div>`;
+    modal.showModal();
+  },
+
+  exportSave(){
+    Save.write();
+    const json = JSON.stringify(S);
+    if(navigator.clipboard?.writeText){
+      navigator.clipboard.writeText(json).then(()=>toast("Save copied to clipboard"));
+    } else {
+      $("#importArea").style.display = "block"; $("#importBox").value = json;
+      toast("Copy the text below");
+    }
+  },
+  downloadSave(){
+    S.lastBackup = Date.now(); Save.write();
+    const d = new Date(), pad = n=>String(n).padStart(2,"0");
+    const name = `signal-save-${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}.json`;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(S)], {type:"application/json"}));
+    a.download = name; a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+    toast("Backup saved: " + name);
+  },
+  importFromFile(input){
+    const file = input.files?.[0]; if(!file) return;
+    file.text().then(txt => this.restore(txt)).catch(()=>toast("Couldn't read that file"));
+    input.value = "";
+  },
+  restore(json){
+    try{
+      const data = JSON.parse(json);
+      if(!data.schemaVersion) throw new Error("bad save");
+      S = migrate(data); rand = mulberry32(S.rngSeed);
+      Save.write();
+      const away = offlineCatchUp(); if(away) this.awaySummary(away);
+      this.render(); toast("Save loaded");
+    }catch(e){ toast("That doesn't look like a Signal save"); }
+  },
+  showImport(){ const a = $("#importArea"); a.style.display = a.style.display==="none"?"block":"none"; $("#importBox").value=""; },
+  importSave(){ this.restore($("#importBox").value); }
+};
+
+/* =============================== DEV =============================== */
+/* Testing only. timeSkip routes through the same productionGains/
+   Workshop.advance used by tick + offline, so it tests the real math. */
+const DEV = {
+  toggle(){ const p = $("#devPanel"); p.style.display = p.style.display==="none"?"block":"none"; },
+  timeSkip(secs){
+    for(const slot of S.expeditions) if(slot.zone) slot.ends -= secs*1000;
+    grant(productionGains(secs));
+    Workshop.advance(secs);
+    const resolved = Expedition.checkResolve();
+    Save.write(); UI.render();
+    toast(`Skipped ${fmtTime(secs)}` + (resolved ? ` · ${resolved} expedition(s) returned` : ""));
+  },
+  finishExpeditions(){
+    let any = false;
+    for(const slot of S.expeditions) if(slot.zone && slot.pending.length===0){ slot.ends = Date.now(); any = true; }
+    const resolved = Expedition.checkResolve();
+    Save.write(); UI.render();
+    toast(any ? `${resolved} expedition(s) returned` : "No expeditions in progress");
+  },
+  grantPack(){ grant({scrap:100, iron_ore:100, copper_ore:100}); Save.write(); UI.render(); toast("+100 scrap, iron, copper"); },
+  reset(){
+    if(!confirm("Wipe this save and start over?")) return;
+    localStorage.removeItem(SAVE_KEY);
+    S = freshState(); rand = mulberry32(S.rngSeed);
+    Save.write(); UI.selectedNode = null; UI.render(); toast("Fresh start");
+  }
+};
+
+/* ============================== BOOT ============================== */
+document.querySelectorAll("nav button").forEach(b =>
+  b.addEventListener("click", ()=>UI.switchView(b.dataset.view)));
+
+(function boot(){
+  const loaded = Save.load();
+  rand = mulberry32(S.rngSeed);
+  if(loaded){
+    const away = offlineCatchUp();
+    if(away) UI.awaySummary(away);
+  }
+  Save.write();
+  UI.render(); UI.renderLive();
+  // Gentle backup nudge: weekly, only once real progress exists
+  const WEEK = 7*24*3600*1000;
+  if(Object.keys(S.nodes).length > 2 && Date.now() - S.lastBackup > WEEK)
+    setTimeout(()=>toast("It's been a while — download a save backup (Logs tab)"), 2500);
+})();
+</script>
+</body>
+</html>
