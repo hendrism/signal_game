@@ -42,39 +42,32 @@ Logs tab to export a backup before destructive testing.
 - Obtain approval before changing schemas, balance numbers, mechanics,
   screens, dependencies, files, build steps, or save format.
 
-## Known engine issues — description only
+## Engine fixes incorporated
 
-These issues are intentionally documented rather than fixed in this baseline:
+The prototype now includes the following foundational corrections:
 
-1. **Workshop progress does not accumulate during live ticks.**
-   `Workshop.advance()` receives roughly one second at a time and rounds down
-   to completed recipe units. The unused fraction is discarded, so recipes
-   requiring several seconds only complete when one call supplies the full
-   duration, such as during offline catch-up or a development time skip.
-2. **Imported saves lose their offline interval.** The restore flow writes the
-   imported state before calculating catch-up. That replaces `lastSaved` with
-   the current time, leaving no elapsed interval to process.
-3. **A multi-discovery expedition can roll the same unique more than once.**
-   All pending discoveries are rolled before any are claimed into state, so
-   later rolls cannot see unique nodes selected earlier in the same batch.
-4. **Duration-specific expedition rules are incomplete.** The authoritative
-   5-minute extractor weighting, 2-hour duplicate reroll, and 8-hour guaranteed
-   ruin-or-anomaly behavior are not implemented yet.
-5. **Schema-version handling is permissive.** Unknown save versions currently
-   pass through migration unchanged rather than being migrated or rejected.
+1. **Workshop accumulation:** Jobs retain fractional live-tick progress and
+   spill excess elapsed time into the next queued job.
+2. **Import catch-up:** Offline catch-up runs before the imported `lastSaved`
+   timestamp is replaced.
+3. **Batch uniqueness:** A per-batch reservation set prevents unique nodes from
+   being selected more than once in a multi-discovery expedition.
+4. **Duration rules:** The 5-minute extractor weighting, 2-hour duplicate
+   reroll, and 8-hour guaranteed ruin-or-anomaly behavior are implemented.
+5. **Strict migration:** Invalid and newer schema versions are rejected while
+   autosave is paused, preventing an unreadable save from being overwritten.
 
-## Save-schema decisions required
+## Approved save-schema extensions
 
-The prototype persists fields not listed in the authoritative state schema:
+The authoritative state schema now includes these approved prototype fields:
 
 - `lastBackup` tracks when the player last downloaded a backup.
 - `features` stores feature and expedition-duration unlock flags.
 - Expedition-slot `pending` stores discoveries awaiting player review.
 
-Before the save format is treated as stable, explicitly approve these fields
-and add them to the schema, or redesign the implementation to derive or store
-the same information using approved fields. Any approved format change must
-include an appropriate `schemaVersion` decision and migration policy.
+Workshop jobs also persist `progress`, the accumulated seconds toward the
+current unit. The roadmap defines the strict rejection and stepwise migration
+policy for schema versions.
 
 ## Baseline verification
 

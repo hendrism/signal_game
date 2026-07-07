@@ -168,12 +168,19 @@ events: { ev_cache: { text:"...", choices:[
 
 // ---- STATE (saved) ----
 state = { schemaVersion:1, lastSaved:0, createdAt:0, rngSeed:0,
+  lastBackup:0,                                  // APPROVED: when player last downloaded a backup (weekly nudge)
   inv:{ iron_ore:0 }, storageCap:500,            // cap is per-resource
   nodes:{ n_iron_a:{ discovered:true, linked:false, linkTier:1 } },
   tech:[ "t1_basic_links" ],
-  expeditions:[ { slot:1, zone:"z1_lowlands", ends:0, durationKey:"m30" } ],
-  workshop:[ { recipe:"iron_ingot", qtyQueued:20, startedAt:0 } ],
+  features:[ "m5" ],                             // APPROVED: unlocked feature flags (expedition durations, workshop, …)
+  expeditions:[ { slot:1, zone:"z1_lowlands", ends:0, durationKey:"m30",
+    pending:[] } ],                              // APPROVED: rolled discoveries awaiting player review
+  workshop:[ { recipe:"iron_ingot", qtyQueued:20, progress:0 } ],  // progress = accumulated seconds on current unit
   logsSeen:[ "log_001" ], pity:0, beacon:{ /* stage flags, Stage 4 */ } }
+
+// Migration policy (approved): missing/invalid schemaVersion or version newer
+// than the build -> reject the save and pause autosave so it isn't overwritten;
+// older versions -> migrate stepwise, one version per block, then bump.
 ```
 
 ## 10. Balance Framework (design-locked)

@@ -287,23 +287,35 @@ let S = freshState();
 
 /* ============================ SAVE/LOAD ============================ */
 const Save = {
-  write(){ S.lastSaved = Date.now();
+  locked:false,   // set when an existing save can't be loaded; blocks overwriting it
+  write(){ if(this.locked) return;
+    S.lastSaved = Date.now();
     try{ localStorage.setItem(SAVE_KEY, JSON.stringify(S)); }catch(e){ /* private mode */ } },
   load(){
+    const raw = (()=>{ try{ return localStorage.getItem(SAVE_KEY); }catch(e){ return null; } })();
+    if(!raw) return false;
     try{
-      const raw = localStorage.getItem(SAVE_KEY);
-      if(!raw) return false;
-      const data = JSON.parse(raw);
-      S = migrate(data);
+      S = migrate(JSON.parse(raw));
       return true;
-    }catch(e){ console.warn("Load failed", e); return false; }
+    }catch(e){
+      console.warn("Load failed", e);
+      this.locked = true;   // don't clobber a save we couldn't read
+      setTimeout(()=>toast("Couldn't load the existing save — autosave paused to protect it. Restore from a backup, or Reset in Logs."), 800);
+      return false;
+    }
   }
 };
 function migrate(data){
-  /* EXT: when SCHEMA_VERSION bumps, transform old saves here, step by step */
+  /* Policy (approved): missing/invalid version -> reject (caller catches).
+     Newer version than this build -> reject rather than risk corrupting it.
+     Older versions -> migrate stepwise, one version at a time. */
+  if(typeof data.schemaVersion !== "number") throw new Error("no schema version");
+  if(data.schemaVersion > SCHEMA_VERSION) throw new Error("save is from a newer version of Signal");
+  /* EXT: stepwise migrations, e.g.
+     if(data.schemaVersion === 1){ ...transform...; data.schemaVersion = 2; } */
   if(data.lastBackup === undefined) data.lastBackup = data.createdAt || Date.now();
-  if(data.schemaVersion === SCHEMA_VERSION) return data;
-  return data; // v1: nothing to do
+  for(const job of (data.workshop||[])) if(job.progress === undefined) job.progress = 0;
+  return data;
 }
 
 /* =============================== RNG =============================== */
@@ -394,19 +406,34 @@ const Expedition = {
     let resolved = 0;
     for(const slot of S.expeditions){
       if(slot.zone && slot.ends <= Date.now() && slot.pending.length === 0){
-        const dur = GAME_DATA.expeditionDurations[slot.durationKey];
-        for(let i=0; i<dur.discoveries; i++) slot.pending.push(this.rollDiscovery(slot.zone));
+        const durKey = slot.durationKey;
+        const dur = GAME_DATA.expeditionDurations[durKey];
+        const taken = new Set();   // uniques rolled earlier in this same batch (issue: batch dupes)
+        for(let i=0; i<dur.discoveries; i++)
+          slot.pending.push(this.rollDiscovery(slot.zone, {durKey, taken}));
+        // 8h rule (doc §10): guarantee ≥1 ruin or anomaly if any remain unfound
+        if(durKey === "h8" && !slot.pending.some(d => d.nodeId && ["ruin","anomaly"].includes(GAME_DATA.nodes[d.nodeId.split("#")[0]].type))){
+          const forced = this.rollDiscovery(slot.zone, {durKey, taken, forceKinds:["ruin","anomaly"]});
+          if(forced.nodeId) slot.pending[slot.pending.length-1] = forced;
+        }
         resolved++;
       }
     }
     return resolved;
   },
-  rollDiscovery(zoneId){
+  rollDiscovery(zoneId, opts = {}){
+    const {durKey = null, taken = new Set(), forceKinds = null, isReroll = false} = opts;
     const zone = GAME_DATA.zones[zoneId];
     let table = zone.discoveryTable.filter(e=>{
       const n = GAME_DATA.nodes[e.nodeId];
-      return !(n.unique && S.nodes[e.nodeId]?.discovered);
+      if(n.unique && (S.nodes[e.nodeId]?.discovered || taken.has(e.nodeId))) return false;
+      if(forceKinds && !forceKinds.includes(n.type)) return false;
+      return true;
     });
+    if(forceKinds && !table.length) return {nodeId:null, grant:{scrap:10}};
+    // 5m rule (doc §10): surface finds — extractor weights doubled
+    if(durKey === "m5") table = table.map(e =>
+      GAME_DATA.nodes[e.nodeId].type === "extractor" ? {...e, weight:e.weight*2} : e);
     // Pity (doc §11): 3 dupes in a row forces an unfound unique if any remain
     const uniques = table.filter(e => GAME_DATA.nodes[e.nodeId].unique);
     if(S.pity >= 3 && uniques.length) table = uniques;
@@ -415,9 +442,13 @@ const Expedition = {
     let r = roll()*total, pick = table[0];
     for(const e of table){ r -= e.weight; if(r<=0){ pick = e; break; } }
     const base = GAME_DATA.nodes[pick.nodeId];
+    if(base.unique) taken.add(pick.nodeId);
     // Duplicate extractor => new instance id (doc §11)
     let nodeId = pick.nodeId;
     if(!base.unique && S.nodes[nodeId]?.discovered){
+      // 2h rule (doc §10): one reroll on duplicates
+      if(durKey === "h2" && !isReroll)
+        return this.rollDiscovery(zoneId, {durKey, taken, isReroll:true});
       let i=2; while(S.nodes[`${pick.nodeId}#${i}`]) i++;
       nodeId = `${pick.nodeId}#${i}`;
       S.pity++;
@@ -448,25 +479,26 @@ const Workshop = {
     const cost = {}; for(const [res,n] of Object.entries(r.in)) cost[res] = n*qty;
     if(!canAfford(cost)) return toast("Not enough materials");
     pay(cost);
-    S.workshop.push({recipe:recipeId, qtyQueued:qty, startedAt:Date.now()});
+    S.workshop.push({recipe:recipeId, qtyQueued:qty, progress:0});
     Save.write(); UI.render();
   },
-  /* Advance queues by elapsed seconds. Same path live + offline. */
+  /* Advance queues by elapsed seconds. Same path live + offline.
+     Fractional seconds accumulate in job.progress; leftover time
+     spills into the next queued job when one finishes. */
   advance(elapsedSecs){
     let budget = elapsedSecs;
     while(S.workshop.length && budget > 0){
       const job = S.workshop[0];
       const r = GAME_DATA.recipes[job.recipe];
-      const done = Math.min(job.qtyQueued, Math.floor(budget / r.secs));
+      job.progress = (job.progress||0) + budget; budget = 0;
+      const done = Math.min(job.qtyQueued, Math.floor(job.progress / r.secs));
       if(done > 0){
         const gains = {}; for(const [res,n] of Object.entries(r.out)) gains[res] = n*done;
         grant(gains);
-        job.qtyQueued -= done; budget -= done * r.secs;
+        job.qtyQueued -= done; job.progress -= done * r.secs;
       }
-      if(job.qtyQueued <= 0) S.workshop.shift(); else break;
+      if(job.qtyQueued <= 0){ budget = job.progress; S.workshop.shift(); }
     }
-    // Track partial progress via startedAt drift so live ticks feel continuous
-    if(S.workshop.length) S.workshop[0].startedAt = Date.now() - 0; // EXT: sub-item progress bar
   }
 };
 
@@ -794,8 +826,10 @@ const UI = {
       const data = JSON.parse(json);
       if(!data.schemaVersion) throw new Error("bad save");
       S = migrate(data); rand = mulberry32(S.rngSeed);
+      Save.locked = false;             // restoring from backup is the recovery path
+      const away = offlineCatchUp();   // must run BEFORE Save.write() resets lastSaved
       Save.write();
-      const away = offlineCatchUp(); if(away) this.awaySummary(away);
+      if(away) this.awaySummary(away);
       this.render(); toast("Save loaded");
     }catch(e){ toast("That doesn't look like a Signal save"); }
   },
@@ -827,6 +861,7 @@ const DEV = {
   reset(){
     if(!confirm("Wipe this save and start over?")) return;
     localStorage.removeItem(SAVE_KEY);
+    Save.locked = false;
     S = freshState(); rand = mulberry32(S.rngSeed);
     Save.write(); UI.selectedNode = null; UI.render(); toast("Fresh start");
   }
