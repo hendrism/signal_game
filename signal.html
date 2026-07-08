@@ -200,13 +200,20 @@ const GAME_DATA = {
   },
   zones:{
     z1_lowlands:{name:"The Lowlands", tier:1, unlockTech:null,
-      flavor:"Rust-colored plains under a pale sky. Something here still hums.",
+      flavor:"Rust-colored plains under a pale sky, wind moving through structures that shouldn't still be standing. Something here still hums, and it isn't the wind.",
       discoveryTable:[
         {nodeId:"n_scrap_a", weight:30},
         {nodeId:"n_iron_a",  weight:25},
         {nodeId:"n_copper_a",weight:25},
+        {nodeId:"n_scrap_b", weight:20},
+        {nodeId:"n_iron_b",  weight:22},
         {nodeId:"n_ruin_a",  weight:12},
-        {nodeId:"n_anom_a",  weight:8}
+        {nodeId:"n_ruin_b",  weight:12},
+        {nodeId:"n_ruin_c",  weight:12},
+        {nodeId:"n_ruin_d",  weight:12},
+        {nodeId:"n_anom_a",  weight:8},
+        {nodeId:"n_anom_b",  weight:8},
+        {nodeId:"n_anom_c",  weight:8}
       ]}
     /* EXT: z2_ashfields ... z6_signal_source */
   },
@@ -220,7 +227,21 @@ const GAME_DATA = {
     n_ruin_a:  {type:"ruin", zone:"z1_lowlands", name:"Collapsed Waystation",
       loot:{scrap:25, tech_frag:1}, logId:"log_001", linkCost:{}, sceneId:"sc_ruin_a", unique:true},
     n_anom_a:  {type:"anomaly", zone:"z1_lowlands", name:"Flickering Cache",
-      eventId:"ev_cache", linkCost:{}, sceneId:"sc_anom_a", unique:true}
+      eventId:"ev_cache", linkCost:{}, sceneId:"sc_anom_a", unique:true},
+    n_scrap_b: {type:"extractor", zone:"z1_lowlands", name:"Windrow Yard",
+      produces:"scrap", ratePerMin:0.5, linkCost:{scrap:15}, sceneId:"sc_scrap_b", unique:false},
+    n_iron_b:  {type:"extractor", zone:"z1_lowlands", name:"Ironclad Slope",
+      produces:"iron_ore", ratePerMin:1, linkCost:{scrap:30}, sceneId:"sc_iron_b", unique:false},
+    n_ruin_b:  {type:"ruin", zone:"z1_lowlands", name:"Sunken Depot",
+      loot:{scrap:20, iron_ore:10, tech_frag:1}, logId:"log_002", linkCost:{}, sceneId:"sc_ruin_b", unique:true},
+    n_ruin_c:  {type:"ruin", zone:"z1_lowlands", name:"Toolshed Cache",
+      loot:{scrap:15, copper_ore:10, tech_frag:1}, logId:"log_003", linkCost:{}, sceneId:"sc_ruin_c", unique:true},
+    n_ruin_d:  {type:"ruin", zone:"z1_lowlands", name:"Antenna Frame",
+      loot:{copper_ore:15, scrap:10, tech_frag:1}, logId:"log_004", linkCost:{}, sceneId:"sc_ruin_d", unique:true},
+    n_anom_b:  {type:"anomaly", zone:"z1_lowlands", name:"Sealed Relay Box",
+      eventId:"ev_relay_box", linkCost:{}, sceneId:"sc_anom_b", unique:true},
+    n_anom_c:  {type:"anomaly", zone:"z1_lowlands", name:"Humming Drum",
+      eventId:"ev_signal_drum", linkCost:{}, sceneId:"sc_anom_c", unique:true}
   },
   tech:{
     t1_workshop:{name:"Field Workshop", tier:1, cost:{scrap:30}, fragCost:0, requires:[],
@@ -247,20 +268,44 @@ const GAME_DATA = {
     /* EXT: tier-gate tech unlocking z2 requires tech fragments (doc §10) */
   },
   logs:{
-    log_001:{title:"Field Note 7", text:"…relay went quiet on the third day. We told ourselves it was weather.\nIt was not weather."}
+    log_001:{title:"Field Note 7", text:"…relay went quiet on the third day. We told ourselves it was weather.\nIt was not weather."},
+    log_002:{title:"Field Note 2", text:"Storage's dry, which shouldn't be possible after this long. Someone — something — kept the seals tight.\nI'd call it luck if luck usually smelled like ozone."},
+    log_003:{title:"Maintenance Log, Day 4", text:"Tools racked by size, largest to smallest, exactly like the manual says. Nobody racks tools like the manual says.\nMakes me wonder who's been tidying up."},
+    log_004:{title:"Field Note 5", text:"Found the old relay mast down but not broken — laid flat, deliberate, like someone set it aside instead of losing it.\nWe didn't do that. I checked."},
+    log_005:{title:"Site Memo — Sealed Units", text:"Standing order: don't force the warm ones. I'm not proud of ignoring my own order, but the bolts came loose easy. Too easy.\nWrite it up as a wasted afternoon."},
+    log_006:{title:"Field Note 6", text:"Traced the warmth two hundred meters before the line ducked underground toward the old hub. It's still fed from somewhere.\nI stopped digging. Recommend everyone else does too."},
+    log_007:{title:"Okoye — Shift Log", text:"The humming stops when you get close and starts again once you're a few paces off, like it's shy.\nPutting that in the log because if I don't say it out loud I'll start believing it's polite."},
+    log_008:{title:"Field Note 8", text:"Cracked the housing. Inside, the wiring's arranged wrong for anything we built — too clean, no slack, no waste.\nWhoever strung this wasn't in a hurry, and wasn't one of us."}
   },
   scenes:{
     sc_scrap_a:{text:"Twisted panels half-buried in red soil. Whatever fell here fell hard, and long ago.", choiceId:null},
     sc_iron_a:{text:"A seam of dark ore runs through the hillside like a closed eye.", choiceId:null},
     sc_copper_a:{text:"Green-crusted stone, warm to the touch. The detector ticks approvingly.", choiceId:null},
     sc_ruin_a:{text:"A waystation, roof fallen in. Someone left in a hurry — but they left things behind.", choiceId:null},
-    sc_anom_a:{text:"A supply cache, its lock-light still blinking after all this time. Blinking at you.", choiceId:"ev_cache"}
+    sc_anom_a:{text:"A supply cache, its lock-light still blinking after all this time. Blinking at you.", choiceId:"ev_cache"},
+    sc_scrap_b:{text:"Wind has piled the scrap into long low ridges, sorted almost by size without anyone's help. Walking the windrows kicks up a fine rust dust that clings to everything and settles slow, like it's in no hurry to leave.", choiceId:null},
+    sc_iron_b:{text:"A slope of black-banded rock, cool under a sky gone orange at the edges. The detector reads iron thick enough to mine for years without hitting bottom — whoever surveyed this ridge first knew exactly what they'd found and never came back for it.", choiceId:null},
+    sc_ruin_b:{text:"A supply depot, sunk to its roofline in drifted soil. The door still seals when you pull the lever, airtight after decades, protecting crates that shouldn't have survived weather, animals, or time. Someone built this to last, or something kept it that way.", choiceId:null},
+    sc_ruin_c:{text:"A toolshed, half-collapsed and half-immaculate. One wall has caved to gravel and weeds; the racked tools past it are dust-free, hung by size largest to smallest, exactly the way some long-lost manual would have insisted. Nobody's swept this floor in forty years. It looks swept.", choiceId:null},
+    sc_ruin_d:{text:"A relay mast lies flat across the ridge, guy-wires coiled neat beside it instead of snapped and tangled. It reads less like a fall and more like someone lowered it carefully, meaning to raise it again, and then simply never did.", choiceId:null},
+    sc_anom_b:{text:"A junction box, bolted shut, warm along one seam like it's still doing work nobody asked it to do. No markings, no rust, no reason it should still be warm.", choiceId:"ev_relay_box"},
+    sc_anom_c:{text:"A squat metal drum half-buried near a cracked foundation, humming low and even. Get close and it quiets, like it noticed you; step back and it resumes, unhurried. It's either broken in a very specific way, or it isn't broken at all.", choiceId:"ev_signal_drum"}
   },
   events:{
     ev_cache:{text:"The cache is sealed but the housing is brittle. Force it, or trace its power line first?",
       choices:[
         {label:"Force it open", effects:{grant:{scrap:40}}},
         {label:"Trace the line", effects:{grant:{tech_frag:1}, logId:null, anomalyChance:0}}
+      ]},
+    ev_relay_box:{text:"The bolts are warm enough to notice through gloves. Pry them loose, or trace the warmth back along the line first?",
+      choices:[
+        {label:"Pry the bolts", effects:{grant:{scrap:35}, logId:"log_005"}},
+        {label:"Trace the warmth", effects:{grant:{tech_frag:1}, logId:"log_006"}}
+      ]},
+    ev_signal_drum:{text:"The humming drum has a maintenance hatch, rusted but not stuck. Pop it for parts, or listen a while and follow where the sound leads?",
+      choices:[
+        {label:"Pop the hatch", effects:{grant:{iron_ore:20, copper_ore:20}, logId:"log_007"}},
+        {label:"Follow the sound", effects:{grant:{tech_frag:1}, logId:"log_008"}}
       ]}
   },
   expeditionDurations:{ /* EXT: gate longer ones behind tech features */
