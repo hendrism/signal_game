@@ -31,6 +31,9 @@ jobs:
           mkdir _site
           cp signal.html _site/index.html
           touch _site/.nojekyll
+          BUILD="${GITHUB_SHA::7} · $(date -u '+%Y-%m-%d %H:%M UTC')"
+          sed -i "s/__BUILD_INFO__/${BUILD}/" _site/index.html
+          grep -q "__BUILD_INFO__" _site/index.html && exit 1 || echo "Build stamp: ${BUILD}"
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
