@@ -24,7 +24,9 @@ design and roadmap take precedence.
 
 ## Running the prototype
 
-Open [`signal.html`](signal.html) in a modern browser. There is no package
+Play the hosted build at <https://hendrism.github.io/signal_game/> (deployed
+from `main` by `.github/workflows/deploy-pages.yml`), or open
+[`signal.html`](signal.html) directly in a modern browser. There is no package
 manager, build step, server, or external dependency.
 
 For the intended target, test through iPhone and iPad Safari as well as the
