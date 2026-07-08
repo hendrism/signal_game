@@ -18,5 +18,7 @@ Single-file HTML idle/exploration game for iOS Safari (home-screen web app). Per
 
 ## Current status (update this section as stages complete)
 - Stage 1 + core loop engine: done, tested (production, bandwidth, expeditions with duration rules, pity, workshop accumulation, offline catch-up, strict save migration with overwrite protection).
-- Roadmap position: Stage 2 — next tasks are Sonnet-written Tier 1 content integration, wiring 2h/8h expedition durations to tech unlocks, and GitHub Pages hosting if not yet live.
+- 2h/8h expedition durations wired to tech unlocks (`t2_extended_survey`, `t2_deep_sweep`; fragCost 0 — DECISION under review, see §12 flag in commit history).
+- GitHub Pages live at https://hendrism.github.io/signal_game/ (workflow build via `.github/workflows/deploy-pages.yml`; Pages build_type must stay "workflow", not "legacy").
+- Roadmap position: Stage 2 — next task is Sonnet-written Tier 1 content integration.
 - Fable/Opus gate comes after Sean plays the MVP for a few days.
