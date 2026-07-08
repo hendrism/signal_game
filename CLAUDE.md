@@ -21,5 +21,6 @@ Single-file HTML idle/exploration game for iOS Safari (home-screen web app). Per
 - 2h/8h expedition durations wired to tech unlocks (`t2_extended_survey`, `t2_deep_sweep`; fragCost 0 — DECISION under review, see §12 flag in commit history).
 - GitHub Pages live at https://hendrism.github.io/signal_game/ (workflow build via `.github/workflows/deploy-pages.yml`; Pages build_type must stay "workflow", not "legacy").
 - Tier 1 content integrated (12 nodes, 8 logs, 3 choice events; validated + engine-simulated). Stage 2 build tasks are complete.
+- Early-game agency fix (Sean-approved, doc §2.7): manual sweep (+5 scrap/60s, `GAME_DATA.manualSweep`) and fresh saves seed `startDiscovered` nodes; `state.lastSweep` added via migration default.
 - Roadmap position: end of Stage 2 — Sean plays the MVP for 2–3 days, then the Fable/Opus gate audit (bring play notes + the flagged fragCost/linkCost decisions).
 - Fable/Opus gate comes after Sean plays the MVP for a few days.

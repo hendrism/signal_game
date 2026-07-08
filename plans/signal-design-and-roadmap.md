@@ -38,6 +38,10 @@ You are a lone salvage operator waking a dead planet's dormant network. Discover
 - Autosave to localStorage every 30s + on visibility change.
 - Export/Import: JSON to clipboard / paste. Save includes `schemaVersion` for future migrations.
 
+### 2.7 Manual salvage (approved 2026-07-08, from first playtest)
+- "Sweep the debris" button on the Network screen: **+5 scrap, 60s cooldown** (config in `GAME_DATA.manualSweep`). Active-play bootstrap so early check-ins always have something to do; self-obsoletes once a few extractors are linked. No upgrades, no subtree — it must stay one quiet button.
+- Fresh saves start with the Debris Field already discovered (node flag `startDiscovered:true`) — fiction: the wreckage around your own landing site. Minute one is a link decision, not a wait.
+
 ## 3. Data Architecture (critical)
 All content lives in one `GAME_DATA` object, fully separate from engine code. Adding tiers 4–6 later = appending data only.
 
@@ -152,7 +156,11 @@ nodes: { n_iron_a: { type:"extractor",           // extractor|ruin|relay|anomaly
   eventId:"ev_cache",                            // anomalies only
   bwProvide:6,                                   // relays only: bandwidth capacity added when linked
   linkCost:{ scrap:20 }, sceneId:"sc_iron_a",
-  unique:false } }                               // true = removed from table once found
+  unique:false,                                  // true = removed from table once found
+  startDiscovered:true } }                       // APPROVED: seeded into fresh saves (§2.7)
+
+manualSweep: { label:"Sweep the debris",         // APPROVED: manual salvage (§2.7)
+  grant:{ scrap:5 }, cooldownSecs:60 }
 
 tech: { t1_basic_links: { name:"Basic Links", tier:1,
   cost:{ iron_ingot:10 }, fragCost:0,            // fragCost = tech fragments
@@ -176,6 +184,7 @@ state = { schemaVersion:1, lastSaved:0, createdAt:0, rngSeed:0,
   expeditions:[ { slot:1, zone:"z1_lowlands", ends:0, durationKey:"m30",
     pending:[] } ],                              // APPROVED: rolled discoveries awaiting player review
   workshop:[ { recipe:"iron_ingot", qtyQueued:20, progress:0 } ],  // progress = accumulated seconds on current unit
+  lastSweep:0,                                   // APPROVED: manual sweep cooldown anchor (§2.7)
   logsSeen:[ "log_001" ], pity:0, beacon:{ /* stage flags, Stage 4 */ } }
 
 // Migration policy (approved): missing/invalid schemaVersion or version newer
@@ -199,6 +208,7 @@ Agents implement these numbers; changing them requires Sean's approval.
 | First techs | cost ≈ 10–15 min of production |
 | Tier-gate tech (unlocks zone 2) | ≈ 1 day of casual production + 2 tech fragments |
 | Refining | iron_ingot: 2 ore→1, 10s · copper_wire: 1 ore→2, 8s |
+| Manual sweep (§2.7) | +5 scrap per press, 60s cooldown · fresh saves seed the Debris Field discovered |
 
 **Scaling formulas (tiers 2–6):**
 - Extractor rates: ×3 per tier. Link costs: ×4 per tier (in that tier's materials). Net effect: each new zone feels expensive at first, trivial once integrated. That's the loop's emotional beat; don't smooth it out.

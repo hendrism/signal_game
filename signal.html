@@ -104,6 +104,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
   <!-- ============ NETWORK ============ -->
   <section id="view-network" class="view active">
     <svg id="constellation" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div id="sweepCard"></div>
     <div id="nodePanel"></div>
   </section>
 
@@ -219,7 +220,8 @@ const GAME_DATA = {
   },
   nodes:{
     n_scrap_a: {type:"extractor", zone:"z1_lowlands", name:"Debris Field",
-      produces:"scrap", ratePerMin:0.5, linkCost:{scrap:10}, sceneId:"sc_scrap_a", unique:false},
+      produces:"scrap", ratePerMin:0.5, linkCost:{scrap:10}, sceneId:"sc_scrap_a", unique:false,
+      startDiscovered:true},   /* APPROVED: the wreckage around your own landing site */
     n_iron_a:  {type:"extractor", zone:"z1_lowlands", name:"Rustvein Deposit",
       produces:"iron_ore", ratePerMin:1, linkCost:{scrap:20}, sceneId:"sc_iron_a", unique:false},
     n_copper_a:{type:"extractor", zone:"z1_lowlands", name:"Greenseam Outcrop",
@@ -313,7 +315,9 @@ const GAME_DATA = {
     m30: {label:"30 min", secs:1800,  discoveries:2, needs:"m30"},
     h2:  {label:"2 hr",   secs:7200,  discoveries:3, needs:"h2"},
     h8:  {label:"8 hr",   secs:28800, discoveries:3, needs:"h8"}
-  }
+  },
+  /* APPROVED: manual salvage — active-play bootstrap before automation scales */
+  manualSweep:{label:"Sweep the debris", grant:{scrap:5}, cooldownSecs:60}
 };
 
 /* ============================== STATE ============================== */
@@ -325,8 +329,11 @@ function freshState(){
     schemaVersion:SCHEMA_VERSION, createdAt:Date.now(), lastSaved:Date.now(), lastBackup:Date.now(),
     rngSeed:(Math.random()*2**31)|0,
     inv:{scrap:15}, storageCap:500,
-    nodes:{},                 // id -> {discovered, linked, linkTier}
+    nodes:Object.fromEntries(Object.entries(GAME_DATA.nodes)   // id -> {discovered, linked, linkTier}
+      .filter(([,n])=>n.startDiscovered)
+      .map(([id])=>[id, {discovered:true, linked:false, linkTier:1}])),
     tech:[],
+    lastSweep:0,              // manual sweep cooldown anchor
     features:["m5"],          // feature flags unlocked (expedition durations, workshop…)
     expeditions:[{slot:1, zone:null, ends:0, durationKey:null, pending:[]}],
     workshop:[],              // [{recipe, qtyQueued, startedAt}] single active queue for v1
@@ -365,6 +372,7 @@ function migrate(data){
   /* EXT: stepwise migrations, e.g.
      if(data.schemaVersion === 1){ ...transform...; data.schemaVersion = 2; } */
   if(data.lastBackup === undefined) data.lastBackup = data.createdAt || Date.now();
+  if(data.lastSweep === undefined) data.lastSweep = 0;
   for(const job of (data.workshop||[])) if(job.progress === undefined) job.progress = 0;
   return data;
 }
@@ -578,6 +586,18 @@ const Research = {
   }
 };
 
+/* ======================== MANUAL SWEEP ============================ */
+const Sweep = {
+  msLeft(){ return Math.max(0, (S.lastSweep||0) + GAME_DATA.manualSweep.cooldownSecs*1000 - Date.now()); },
+  collect(){
+    if(this.msLeft() > 0) return;
+    S.lastSweep = Date.now();
+    grant(GAME_DATA.manualSweep.grant);
+    toast(Object.entries(GAME_DATA.manualSweep.grant).map(([r,n])=>`+${n} ${R(r).name}`).join(", "));
+    Save.write(); UI.render();
+  }
+};
+
 /* ============================= NETWORK ============================= */
 const Network = {
   link(nodeId){
@@ -653,13 +673,22 @@ const UI = {
   },
 
   render(){
-    this.renderStorage(); this.renderConstellation(); this.renderNodePanel();
+    this.renderStorage(); this.renderConstellation(); this.renderSweep(); this.renderNodePanel();
     this.renderExpeditions(); this.renderWorkshop(); this.renderResearch(); this.renderLogs();
   },
   renderLive(){  // cheap per-second updates only
     this.renderStorage();
     if(this.currentView === "expeditions") this.renderExpeditions();
+    if(this.currentView === "network") this.renderSweep();
     $("#clock").textContent = new Date().toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+  },
+
+  renderSweep(){
+    const ms = Sweep.msLeft();
+    const gstr = Object.entries(GAME_DATA.manualSweep.grant).map(([r,n])=>`+${n} ${R(r).name}`).join(", ");
+    $("#sweepCard").innerHTML = `<div class="btnrow" style="margin:0 0 10px">
+      <button class="${ms?"":"primary"}" ${ms?"disabled":""} onclick="Sweep.collect()">
+        ${ms ? `Sweep again in ${Math.ceil(ms/1000)}s` : `${GAME_DATA.manualSweep.label} · ${gstr}`}</button></div>`;
   },
 
   renderStorage(){
