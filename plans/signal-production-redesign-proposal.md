@@ -73,8 +73,11 @@ ingot/min) → Filter Assembly (missing 0.5 filters/min)"* with **Disconnect
 anyway / Cancel**. On confirm, affected assignments go **idle — missing
 inputs**: configuration kept, commitments released, output zero. Idle = zero
 rate, so offline math is unaffected.
-- OPEN (playtest): auto-resume idle assignments when inputs return (lean yes,
-  with a toast) vs. manual restart.
+- RESOLVED (Sean, 2026-07-09): **auto-resume with a toast** ("Gas Filters
+  resumed"). Safe because rates only change via player actions (link, free a
+  commitment) — never passively — so resume always happens while the player is
+  acting, never invisibly offline. Fallback if playtest shows auto feels
+  surprising: confirm box ("Inputs available — resume Gas Filters?").
 
 ## 4. UI
 
@@ -97,8 +100,9 @@ Gas filter  +0.5/min
 
 ### 4.3 Inventory page
 Stockpile view: every raw / intermediate / finished good with amount and cap.
-- OPEN: own tab vs. expanded storage-strip panel (lean: section on the
-  Production page — rates above, stockpiles below, one scroll).
+- RESOLVED (Sean, 2026-07-09): try a **section on the Production page** first
+  (rates above, stockpiles below, one scroll). Evaluate in the UI prototype;
+  promote to its own tab only if the page feels crowded.
 
 ## 5. What this replaces / what stays
 
@@ -143,10 +147,24 @@ assignments in tier 3 (suggesting recipes, pre-lighting options).
 5. Fable/Opus gate reviews the marked-up proposal + prototype feel before the
    engine rewrite is approved.
 
-## 9. Open questions for Sean's markup
-1. Auto-resume idled assignments when inputs return? (lean yes)
-2. Inventory: own tab or Production-page section? (lean section)
-3. Link tiers: extraction-rate multiplier, slot throughput, or both?
-4. Do anomaly/ruin nodes ever host production, or extractors only?
-5. Recipe unlock grain: per-recipe techs (collector-friendly, many small
-   unlocks — fits the pillar) vs. category techs (fewer, chunkier)?
+## 9. Open questions — resolutions (Sean, 2026-07-09)
+1. ~~Auto-resume idled assignments?~~ **RESOLVED: auto-resume + toast**
+   (see §3.4; confirm-box fallback if playtest disagrees).
+2. ~~Inventory: tab or section?~~ **RESOLVED: Production-page section first**,
+   judge in prototype (see §4.3).
+3. **Link tiers — OPEN, Fable recommends option C, Sean confirming.**
+   - A: upgrades boost extraction only (factories static — weak for the
+     upgrading pillar).
+   - B: upgrades boost factory speed only (mines static — same flaw mirrored).
+   - C (recommended): **a link tier doubles whatever the node does** — mine:
+     2× ore/min; factory: recipe at 2× (double inputs, double outputs). One
+     rule, everything upgradeable, factory upgrades raise upstream demand —
+     that ripple is the logistics puzzle. Cost/balance handled in the §10
+     numbers pass.
+4. ~~Production on ruins/anomalies?~~ **RESOLVED: extractors only (v1).**
+   Node identities stay crisp: extractor = economy, ruin = story + loot,
+   anomaly = event, relay = infrastructure. "Repurposed ruin as fab" parked
+   as tier 4+ escalation — special because ruins normally don't produce.
+5. ~~Recipe unlock grain?~~ **RESOLVED: per-recipe techs as default**
+   (each unlock = a new thing to make; feeds the deep-catalogs pillar), plus
+   occasional 2–3-recipe family bundles as tier milestones.
