@@ -23,4 +23,5 @@ Single-file HTML idle/exploration game for iOS Safari (home-screen web app). Per
 - Tier 1 content integrated (12 nodes, 8 logs, 3 choice events; validated + engine-simulated). Stage 2 build tasks are complete.
 - Early-game agency fix (Sean-approved, doc §2.7): manual sweep (+5 scrap/60s, `GAME_DATA.manualSweep`) and fresh saves seed `startDiscovered` nodes; `state.lastSweep` added via migration default.
 - Roadmap position: end of Stage 2 — Sean plays the MVP for 2–3 days, then the Fable/Opus gate audit (bring play notes + the flagged fragCost/linkCost decisions).
+- PROPOSAL pending Sean's markup: `plans/signal-production-redesign-proposal.md` (rate-pooled production system, Stage 3 candidate; from Sean's playtest notes). Do not implement until approved; design doc still governs.
 - Fable/Opus gate comes after Sean plays the MVP for a few days.
