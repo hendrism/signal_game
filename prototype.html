@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>SIGNAL — production prototype</title>
+<style>
+:root{
+  --bg:#0d1117; --bg-card:#151d2b; --line:#243043;
+  --text:#c9d4e3; --text-dim:#6b7a90;
+  --accent:#e8a33d; --accent-dim:#8a6425;
+  --good:#7bc47f; --danger:#d1706b; --radius:12px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  background:var(--bg);color:var(--text);
+  font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  padding-bottom:calc(64px + env(safe-area-inset-bottom));
+}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em}
+.dim{color:var(--text-dim)} .accent{color:var(--accent)}
+.good{color:var(--good)} .danger{color:var(--danger)}
+.small{font-size:.82rem}
+header{padding:calc(10px + env(safe-area-inset-top)) 16px 6px}
+header h1{font-size:1.05rem;font-weight:600;letter-spacing:.02em}
+main{padding:0 16px;max-width:640px;margin:0 auto}
+.view{display:none} .view.active{display:block}
+.card{background:var(--bg-card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:14px;margin-bottom:12px}
+.card h3{font-size:1rem;font-weight:600;margin-bottom:6px}
+button{background:var(--bg-card);border:1px solid var(--line);border-radius:10px;
+  color:var(--text);padding:10px 14px;font-size:.9rem}
+button.primary{background:var(--accent-dim);border-color:var(--accent);color:#fff}
+button:disabled{opacity:.45}
+.btnrow{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+
+/* node picker chips */
+#chips{display:flex;gap:8px;overflow-x:auto;padding:8px 0 4px;-webkit-overflow-scrolling:touch}
+#chips button{white-space:nowrap;padding:7px 12px;font-size:.82rem;border-radius:999px}
+#chips button.active{border-color:var(--accent);color:var(--accent)}
+
+/* radial stage */
+#stage{position:relative;height:400px;margin:4px 0 0}
+.orb{position:absolute;border-radius:50%;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;text-align:center;
+  transform:translate(-50%,-50%);border:1px solid var(--line);background:var(--bg-card);
+  transition:box-shadow .2s,border-color .2s}
+#centerOrb{width:128px;height:128px;border-color:var(--accent);box-shadow:0 0 24px rgba(232,163,61,.18)}
+#centerOrb .glyph{font-size:1.5rem;color:var(--accent)}
+#centerOrb .nm{font-size:.72rem;font-weight:600;line-height:1.2;padding:0 8px}
+#centerOrb .st{font-size:.64rem;color:var(--text-dim)}
+.opt{width:82px;height:82px}
+.opt .glyph{font-size:1.15rem}
+.opt .nm{font-size:.6rem;line-height:1.15;padding:0 6px}
+.opt .st{font-size:.56rem;line-height:1.15;padding:0 4px}
+.opt.avail{border-color:var(--good);box-shadow:0 0 14px rgba(123,196,127,.22)}
+.opt.avail .glyph{color:var(--good)}
+.opt.current{border-color:var(--accent)}
+.opt.current .glyph{color:var(--accent)}
+.opt.locked{opacity:.5}
+#nodeMeta{margin-top:2px}
+
+/* production ledger */
+.ledgerRow{padding:10px 0;border-bottom:1px solid var(--line)}
+.ledgerRow:last-child{border-bottom:none}
+.ledgerRow .top{display:flex;justify-content:space-between;align-items:baseline}
+.ledgerRow .net{font-family:ui-monospace,Menlo,monospace;font-size:.95rem}
+.invRow{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line)}
+.invRow:last-child{border-bottom:none}
+.bar{height:3px;background:var(--line);border-radius:2px;margin-top:4px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent-dim)}
+
+/* nav */
+nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:var(--bg-card);
+  border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);z-index:5}
+nav button{flex:1;border:none;border-radius:0;background:none;color:var(--text-dim);
+  padding:12px 0;font-size:.8rem}
+nav button.active{color:var(--accent)}
+nav .glyph{display:block;font-size:1.1rem}
+
+/* modal + toast */
+#overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;z-index:10;
+  align-items:flex-end;justify-content:center}
+#overlay.open{display:flex}
+#sheet{background:var(--bg-card);border:1px solid var(--line);border-radius:16px 16px 0 0;
+  padding:18px 18px calc(18px + env(safe-area-inset-bottom));width:100%;max-width:640px}
+#sheet h3{margin-bottom:8px}
+#sheet ul{list-style:none;margin:8px 0}
+#sheet li{padding:3px 0;font-size:.88rem}
+#toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom));transform:translateX(-50%);
+  background:var(--bg-card);border:1px solid var(--accent-dim);border-radius:999px;
+  padding:8px 18px;font-size:.85rem;opacity:0;transition:opacity .25s;z-index:20;
+  white-space:nowrap;max-width:92vw;overflow:hidden;text-overflow:ellipsis}
+</style>
+</head>
+<body>
+<header>
+  <h1>SIGNAL <span class="dim small">· production prototype (throwaway, fake data)</span></h1>
+</header>
+<main>
+  <!-- ============ NODE VIEW ============ -->
+  <section id="view-node" class="view active">
+    <div id="chips"></div>
+    <div id="stage"></div>
+    <div id="nodeMeta"></div>
+  </section>
+
+  <!-- ============ PRODUCTION ============ -->
+  <section id="view-prod" class="view">
+    <div class="card"><h3>Production</h3><div id="ledger"></div></div>
+    <div class="card"><h3>Inventory</h3><div id="invList"></div></div>
+  </section>
+</main>
+
+<nav>
+  <button data-view="node" class="active"><span class="glyph">◉</span>Node</button>
+  <button data-view="prod"><span class="glyph">≋</span>Production</button>
+</nav>
+
+<div id="overlay"><div id="sheet"></div></div>
+<div id="toast"></div>
+
+<script>
+/* ====================== FAKE DATA (prototype only) ====================== */
+const RES = {
+  iron_ore:   {name:"Iron Ore",    glyph:"◆", discovered:true},
+  copper_ore: {name:"Copper Ore",  glyph:"◇", discovered:true},
+  coal:       {name:"Coal",        glyph:"■", discovered:true},
+  sulfur:     {name:"Sulfur",      glyph:"▲", discovered:true},
+  quartz:     {name:"Quartz",      glyph:"✦", discovered:false},
+  iron_ingot: {name:"Iron Ingot",  glyph:"▰", discovered:true},
+  copper_wire:{name:"Copper Wire", glyph:"∿", discovered:true},
+  gas_filter: {name:"Gas Filter",  glyph:"⬡", discovered:true},
+  steel_plate:{name:"Steel Plate", glyph:"▤", discovered:true},
+  sensor_glass:{name:"Sensor Glass",glyph:"◈", discovered:true},
+  repeater:   {name:"Signal Repeater", glyph:"⌖", discovered:true}
+};
+/* per-minute input rates -> per-minute output rate (at tier 1) */
+const RECIPES = {
+  iron_ingot:  {name:"Iron Ingots",  out:"iron_ingot",  in:{iron_ore:2},                    outRate:1,   researched:true},
+  copper_wire: {name:"Copper Wire",  out:"copper_wire", in:{copper_ore:1},                  outRate:2,   researched:true},
+  gas_filter:  {name:"Gas Filters",  out:"gas_filter",  in:{iron_ore:5, coal:2, sulfur:1},  outRate:0.5, researched:true},
+  steel_plate: {name:"Steel Plates", out:"steel_plate", in:{iron_ingot:1, coal:1},          outRate:0.5, researched:true},
+  sensor_glass:{name:"Sensor Glass", out:"sensor_glass",in:{quartz:2, copper_wire:1},       outRate:0.5, researched:true},
+  repeater:    {name:"Signal Repeater", out:"repeater", in:{copper_wire:2, iron_ingot:1},   outRate:0.25, researched:false}
+};
+/* node.mode: "extract" | "produce"; produce uses node.recipe; idle = configured but starved */
+const NODES = {
+  rustvein: {name:"Rustvein Deposit",  extractRes:"iron_ore",   extractRate:10, tier:1, mode:"extract", recipe:null, idle:false},
+  greenseam:{name:"Greenseam Outcrop", extractRes:"copper_ore", extractRate:6,  tier:1, mode:"extract", recipe:null, idle:false},
+  coalbed:  {name:"Coalbed Terrace",   extractRes:"coal",       extractRate:6,  tier:1, mode:"extract", recipe:null, idle:false},
+  ashvent:  {name:"Ashvent Field",     extractRes:"sulfur",     extractRate:4,  tier:1, mode:"extract", recipe:null, idle:false},
+  boiler:   {name:"Old Boiler House",  extractRes:"iron_ore",   extractRate:3,  tier:1, mode:"extract", recipe:null, idle:false}
+};
+const inv = {iron_ore:120, copper_ore:60, coal:40, sulfur:12, iron_ingot:8, copper_wire:10, gas_filter:0, steel_plate:0, sensor_glass:0, repeater:0};
+const CAP = 500;
+let selected = "rustvein", currentView = "node";
+
+/* ====================== RATE MATH (the whole model) ====================== */
+const mult = n => 2 ** (n.tier - 1);           // option C: tier doubles whatever the node does
+function rates(){
+  const produced = {}, committed = {};
+  const add = (o,r,v)=>{ o[r] = (o[r]||0) + v; };
+  for(const n of Object.values(NODES)){
+    if(n.idle) continue;
+    if(n.mode === "extract") add(produced, n.extractRes, n.extractRate * mult(n));
+    else if(n.recipe){
+      const rc = RECIPES[n.recipe];
+      for(const [r,v] of Object.entries(rc.in)) add(committed, r, v * mult(n));
+      add(produced, rc.out, rc.outRate * mult(n));
+    }
+  }
+  const net = {};
+  for(const r of Object.keys(RES)) net[r] = (produced[r]||0) - (committed[r]||0);
+  return {produced, committed, net};
+}
+/* who consumes r, for the ledger + cascade messages */
+function consumersOf(r){
+  return Object.entries(NODES)
+    .filter(([,n]) => n.mode==="produce" && n.recipe && !n.idle && RECIPES[n.recipe].in[r])
+    .map(([id,n]) => ({id, n, amt: RECIPES[n.recipe].in[r] * mult(n)}));
+}
+/* simulate a mutation; returns nodes that must idle to keep every net >= 0 */
+function cascadeOf(mutate){
+  const saved = JSON.stringify(NODES);
+  mutate();
+  const idled = [];
+  let guard = 20;
+  while(guard--){
+    const {net} = rates();
+    const bad = Object.keys(net).find(r => net[r] < -1e-9);
+    if(!bad) break;
+    const c = consumersOf(bad)[0];
+    if(!c) break;
+    NODES[c.id].idle = true; idled.push(c.id);
+  }
+  const back = JSON.parse(saved);           // restore in place — never replace node
+  for(const k of Object.keys(back)) Object.assign(NODES[k], back[k]);   // objects, held references must stay valid
+  return idled;
+}
+/* auto-resume (resolved decision): after any change, wake idle nodes that now fit */
+function autoResume(){
+  let woke = true;
+  const resumed = [];
+  while(woke){
+    woke = false;
+    for(const [id,n] of Object.entries(NODES)){
+      if(!n.idle) continue;
+      n.idle = false;
+      const {net} = rates();
+      if(Object.values(net).some(v => v < -1e-9)) n.idle = true;
+      else { woke = true; resumed.push(RECIPES[n.recipe]?.name || n.name); }
+    }
+  }
+  return resumed;   // callers fold resumed names into their own toast
+}
+function resumeSuffix(){
+  const r = autoResume();
+  return r.length ? " · resumed " + r.join(", ") : "";
+}
+
+/* ====================== ACTIONS ====================== */
+function feasible(mutate){
+  const saved = JSON.stringify(NODES);
+  mutate();
+  const {net} = rates();
+  const bad = Object.entries(net).filter(([,v]) => v < -1e-9);
+  const back = JSON.parse(saved);
+  for(const k of Object.keys(back)) Object.assign(NODES[k], back[k]);
+  return bad;
+}
+function missingFor(nodeId, recipeId){
+  return feasible(()=>{ const n=NODES[nodeId]; n.mode="produce"; n.recipe=recipeId; n.idle=false; })
+    .map(([r,v]) => `${(-v).toFixed(1).replace(/\.0$/,"")} ${RES[r].name}/min`);
+}
+function assign(nodeId, recipeId){
+  const n = NODES[nodeId], rc = RECIPES[recipeId];
+  const inStr = Object.entries(rc.in).map(([r,v])=>`${v*mult(n)} ${RES[r].name}/min`).join(" · ");
+  sheet(`Assign ${rc.name}?`, [
+    `Commits ${inStr}`,
+    `Produces ${rc.outRate*mult(n)} ${RES[rc.out].name}/min`,
+    `Forfeits this node's ${n.extractRate*mult(n)} ${RES[n.extractRes].name}/min extraction`
+  ], "Assign", ()=>{
+    const cas = cascadeOf(()=>{ n.mode="produce"; n.recipe=recipeId; n.idle=false; });
+    const apply = ()=>{ n.mode="produce"; n.recipe=recipeId; n.idle=false;
+      for(const id of cas) NODES[id].idle = true;
+      toast(rc.name+" online"+resumeSuffix()); render(); };
+    if(cas.length) confirmCascade(cas, apply); else apply();
+  });
+}
+function revert(nodeId){
+  const n = NODES[nodeId];
+  const cas = cascadeOf(()=>{ n.mode="extract"; n.recipe=null; n.idle=false; });
+  const apply = ()=>{ n.mode="extract"; n.recipe=null; n.idle=false;
+    for(const id of cas) NODES[id].idle = true;
+    toast("Extraction restored"+resumeSuffix()); render(); };
+  if(cas.length) confirmCascade(cas, apply);
+  else sheet(`Return to extraction?`, [`Resumes ${n.extractRate*mult(n)} ${RES[n.extractRes].name}/min`,
+    n.recipe?`Stops ${RECIPES[n.recipe].name}`:""].filter(Boolean), "Revert", apply);
+}
+function upgrade(nodeId){
+  const n = NODES[nodeId];
+  const what = n.mode==="extract"
+    ? `${RES[n.extractRes].name} ${n.extractRate*mult(n)} → ${n.extractRate*mult(n)*2}/min`
+    : `${RECIPES[n.recipe].name} at 2× (inputs and output double)`;
+  const bad = feasible(()=>{ n.tier++; });
+  if(n.mode==="produce" && bad.length){
+    toast("Can't upgrade — needs " + bad.map(([r,v])=>`${(-v).toFixed(1).replace(/\.0$/,"")} ${RES[r].name}/min`).join(", "));
+    return;
+  }
+  sheet(`Upgrade link to tier ${n.tier+1}?`, [what, "Cost: free (prototype)"], "Upgrade", ()=>{
+    const cas = cascadeOf(()=>{ n.tier++; });
+    n.tier++;
+    for(const id of cas) NODES[id].idle = true;
+    toast("Link tier "+n.tier+resumeSuffix()); render();
+  });
+}
+function confirmCascade(ids, onYes){
+  sheet("This will idle:", ids.map(id=>{
+    const n = NODES[id];
+    return `⚠ ${RECIPES[n.recipe].name} (${n.name}) — missing inputs`;
+  }), "Do it anyway", onYes);
+}
+
+/* ====================== UI ====================== */
+const $ = s => document.querySelector(s);
+function fmtRate(v){ const s=(Math.round(v*10)/10).toString(); return (v>0?"+":"")+s; }
+
+function render(){ renderChips(); renderStage(); renderLedger(); renderInv(); }
+
+function renderChips(){
+  $("#chips").innerHTML = Object.entries(NODES).map(([id,n])=>
+    `<button class="${id===selected?"active":""}" onclick="selected='${id}';render()">${n.name}</button>`).join("");
+}
+
+function renderStage(){
+  const n = NODES[selected];
+  const opts = [];
+  // option ring: every recipe + (if producing) the revert-to-extraction option
+  if(n.mode === "produce")
+    opts.push({kind:"extract", label:`Extract ${RES[n.extractRes].name}`, glyph:RES[n.extractRes].glyph,
+      st:`${n.extractRate*mult(n)}/min`, cls:"avail", tap:()=>revert(selected)});
+  for(const [rid,rc] of Object.entries(RECIPES)){
+    const isCurrent = n.mode==="produce" && n.recipe===rid;
+    const undiscovered = Object.keys(rc.in).find(r => !RES[r].discovered);
+    let cls, st, tap;
+    if(isCurrent){ cls="current"; st = n.idle ? "idle" : `${rc.outRate*mult(n)}/min`; tap=()=>toast("Already producing here"); }
+    else if(!rc.researched){ cls="locked"; st="research"; tap=()=>toast(`Research ${rc.name} first`); }
+    else if(undiscovered){ cls="locked"; st=`${RES[undiscovered].name}?`; tap=()=>toast(`${RES[undiscovered].name} not yet discovered — explore`); }
+    else {
+      const miss = missingFor(selected, rid);
+      if(miss.length){ cls="locked"; st="needs "+miss[0]; tap=()=>toast(`Needs ${miss.join(", ")} free`); }
+      else { cls="avail"; st=`${rc.outRate*mult(n)}/min`; tap=()=>assign(selected, rid); }
+    }
+    opts.push({kind:rid, label:rc.name, glyph:RES[rc.out].glyph, st, cls, tap});
+  }
+  const W = $("#stage").clientWidth || 360, cx = W/2, cy = 200, R = Math.max(120, Math.min(W/2 - 48, 150));
+  let html = `<div class="orb" id="centerOrb" style="left:${cx}px;top:${cy}px">
+      <span class="glyph">${n.mode==="extract" ? RES[n.extractRes].glyph : RES[RECIPES[n.recipe].out].glyph}</span>
+      <span class="nm">${n.name}</span>
+      <span class="st">${n.idle ? "idle — missing inputs"
+        : n.mode==="extract" ? `${RES[n.extractRes].name} ${n.extractRate*mult(n)}/min`
+        : `${RECIPES[n.recipe].name} ${RECIPES[n.recipe].outRate*mult(n)}/min`} · T${n.tier}</span>
+    </div>`;
+  opts.forEach((o,i)=>{
+    const a = -Math.PI/2 + i * (2*Math.PI/opts.length);
+    const x = cx + R*Math.cos(a), y = cy + R*Math.sin(a);
+    html += `<div class="orb opt ${o.cls}" style="left:${x}px;top:${y}px" onclick="OPTS[${i}].tap()">
+      <span class="glyph">${o.glyph}</span><span class="nm">${o.label}</span><span class="st">${o.st}</span></div>`;
+  });
+  window.OPTS = opts;
+  $("#stage").innerHTML = html;
+  $("#nodeMeta").innerHTML = `<div class="btnrow" style="justify-content:center">
+    <button onclick="upgrade('${selected}')">Upgrade link · T${n.tier} → T${n.tier+1} (×2)</button></div>
+    <p class="dim small" style="text-align:center;margin-top:8px">Green = available now · dim = locked (reason shown) · tap anything</p>`;
+}
+
+function renderLedger(){
+  const {produced, committed, net} = rates();
+  const rows = Object.keys(RES).filter(r => (produced[r]||0) > 0 || (committed[r]||0) > 0);
+  const idleNodes = Object.values(NODES).filter(n => n.idle);
+  $("#ledger").innerHTML = rows.map(r=>{
+    const cons = consumersOf(r).map(c => `${c.amt}/min → ${RECIPES[c.n.recipe].name}`).join(" · ");
+    const sub = [`${produced[r]||0}/min total`, cons].filter(Boolean).join(" · ");
+    return `<div class="ledgerRow">
+      <div class="top"><span>${RES[r].glyph} ${RES[r].name}</span>
+        <span class="net ${net[r]>0?"good":net[r]<0?"danger":"dim"}">${fmtRate(net[r])}/min</span></div>
+      <div class="dim small">${sub}</div></div>`;
+  }).join("") + idleNodes.map(n =>
+    `<div class="ledgerRow"><div class="top"><span class="danger">⚠ ${RECIPES[n.recipe].name} (${n.name})</span>
+      <span class="dim small">idle — missing inputs</span></div></div>`).join("");
+}
+
+function renderInv(){
+  $("#invList").innerHTML = Object.entries(inv)
+    .filter(([r]) => RES[r].discovered)
+    .map(([r,v]) => `<div class="invRow"><span>${RES[r].glyph} ${RES[r].name}</span>
+      <span class="mono">${Math.floor(v)}<span class="dim">/${CAP}</span></span></div>
+      <div class="bar"><i style="width:${Math.min(100, v/CAP*100)}%"></i></div>`).join("");
+}
+
+/* ====================== plumbing ====================== */
+function sheet(title, lines, cta, onYes){
+  $("#sheet").innerHTML = `<h3>${title}</h3><ul>${lines.map(l=>`<li>${l}</li>`).join("")}</ul>
+    <div class="btnrow"><button class="primary" id="sheetYes">${cta}</button>
+    <button onclick="closeSheet()">Cancel</button></div>`;
+  $("#sheetYes").onclick = ()=>{ closeSheet(); onYes(); };
+  $("#overlay").classList.add("open");
+}
+function closeSheet(){ $("#overlay").classList.remove("open"); }
+$("#overlay").addEventListener("click", e => { if(e.target.id==="overlay") closeSheet(); });
+
+let toastTimer;
+function toast(msg){
+  const t = $("#toast"); t.textContent = msg; t.style.opacity = 1;
+  clearTimeout(toastTimer); toastTimer = setTimeout(()=>t.style.opacity = 0, 2200);
+}
+
+document.querySelectorAll("nav button").forEach(b => b.addEventListener("click", ()=>{
+  currentView = b.dataset.view;
+  document.querySelectorAll(".view").forEach(el => el.classList.toggle("active", el.id === "view-"+currentView));
+  document.querySelectorAll("nav button").forEach(x => x.classList.toggle("active", x === b));
+  render();
+}));
+
+window.addEventListener("resize", ()=>{ if(currentView === "node") renderStage(); });
+
+/* live inventory tick — net rates flow into stockpiles, always linear */
+setInterval(()=>{
+  const {net} = rates();
+  for(const [r,v] of Object.entries(net)) inv[r] = Math.max(0, Math.min(CAP, (inv[r]||0) + v/60));
+  if(currentView === "prod") renderInv();
+}, 1000);
+
+render();
+</script>
+</body>
+</html>

@@ -135,9 +135,12 @@ assignments in tier 3 (suggesting recipes, pre-lighting options).
 
 ## 8. Phasing (recommendation)
 1. **Now:** Sean marks up this doc. No engine work.
-2. **Prototype (one session, throwaway):** radial node UI with fake data —
-   validate the "open a node, see what it could become" moment on iPhone
-   before any engine surgery.
+2. **Prototype (one session, throwaway):** ✅ BUILT — live at
+   https://hendrism.github.io/signal_game/prototype.html (`prototype.html`,
+   fake data, delete after evaluation). Demonstrates: radial node view with
+   all four lock states, commitment model, extract-vs-manufacture forfeit,
+   option C upgrades, cascade dialog, auto-resume, production ledger,
+   inventory section with live accrual.
 3. **Stage 3 opens with the planned file split** (`index.html` / `engine.js`
    / `data.js`) — the natural surgery point. Production system becomes the
    centerpiece of revised Stage 3, displacing some planned Stage 3 items
@@ -152,15 +155,12 @@ assignments in tier 3 (suggesting recipes, pre-lighting options).
    (see §3.4; confirm-box fallback if playtest disagrees).
 2. ~~Inventory: tab or section?~~ **RESOLVED: Production-page section first**,
    judge in prototype (see §4.3).
-3. **Link tiers — OPEN, Fable recommends option C, Sean confirming.**
-   - A: upgrades boost extraction only (factories static — weak for the
-     upgrading pillar).
-   - B: upgrades boost factory speed only (mines static — same flaw mirrored).
-   - C (recommended): **a link tier doubles whatever the node does** — mine:
-     2× ore/min; factory: recipe at 2× (double inputs, double outputs). One
-     rule, everything upgradeable, factory upgrades raise upstream demand —
-     that ripple is the logistics puzzle. Cost/balance handled in the §10
-     numbers pass.
+3. ~~Link tiers?~~ **RESOLVED (Sean, 2026-07-09): option C — a link tier
+   doubles whatever the node does.** Mine: 2× ore/min; factory: recipe at 2×
+   (double inputs, double outputs). One rule, everything upgradeable, factory
+   upgrades raise upstream demand — that ripple is the logistics puzzle.
+   Cost/balance handled in the §10 numbers pass. (Rejected: A — extraction
+   only; B — factory speed only; both leave half the nodes static.)
 4. ~~Production on ruins/anomalies?~~ **RESOLVED: extractors only (v1).**
    Node identities stay crisp: extractor = economy, ruin = story + loot,
    anomaly = event, relay = infrastructure. "Repurposed ruin as fab" parked

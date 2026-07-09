@@ -30,6 +30,7 @@ jobs:
         run: |
           mkdir _site
           cp signal.html _site/index.html
+          cp prototype.html _site/prototype.html
           touch _site/.nojekyll
           BUILD="${GITHUB_SHA::7} · $(TZ='America/New_York' date '+%Y-%m-%d %-I:%M %p ET')"
           sed -i "s/__BUILD_INFO__/${BUILD}/" _site/index.html
